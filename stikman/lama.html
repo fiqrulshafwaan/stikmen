@@ -1,0 +1,4364 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stickman Duel - Physics Fighting Game</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+:root {
+    --bg-dark: #090d15;
+    --bg-card: rgba(18, 25, 38, 0.88);
+    --border-color: #233147;
+    --p1-blue: #00d4ff;
+    --p1-glow: rgba(0, 212, 255, 0.35);
+    --p2-red: #ff3366;
+    --p2-glow: rgba(255, 51, 102, 0.35);
+    --text-main: #f0f4fc;
+    --text-muted: #8b9bb4;
+}
+
+body {
+    background: var(--bg-dark);
+    color: var(--text-main);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* =========================================
+   CONTAINER & CANVAS
+   ========================================= */
+.app-container {
+    position: relative;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 480px;
+    overflow: hidden;
+}
+
+#gameCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    display: block;
+}
+
+/* =========================================
+   UI LAYERS SYSTEM
+   ========================================= */
+.ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    display: none;
+    flex-direction: column;
+    pointer-events: auto;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.ui-layer.active {
+    display: flex;
+}
+
+/* =========================================
+   1. MAIN MENU LAYER
+   ========================================= */
+.menu-overlay {
+    background-color: #090d15;
+    background-image: url('bg menu.png');
+    background-image: url('bg%20menu.png');
+    background-position: center center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    justify-content: space-between;
+    align-items: center;
+    padding: 36px 20px 24px;
+}
+
+.menu-header {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.game-title {
+    font-size: clamp(38px, 7vw, 68px);
+    font-weight: 950;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    line-height: 1.05;
+    background: linear-gradient(180deg, #ffffff 30%, #a9c4eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 18px rgba(0, 180, 255, 0.3));
+    margin-bottom: 6px;
+}
+
+.game-title span.blue {
+    background: linear-gradient(135deg, #00f0ff, #388bfd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.game-title span.red {
+    background: linear-gradient(135deg, #ff7b00, #ff3366);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.game-subtitle {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.menu-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 320px;
+    margin: auto 0;
+}
+
+.btn-menu {
+    position: relative;
+    padding: 14px 24px;
+    background: linear-gradient(180deg, #1f2b3e, #141c2b);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-main);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-menu:hover {
+    background: linear-gradient(180deg, #2b3b55, #1c273b);
+    border-color: #48648f;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 170, 255, 0.2);
+}
+
+.btn-menu:active {
+    transform: translateY(1px);
+}
+
+.btn-menu.primary {
+    background: linear-gradient(135deg, #0077ff, #00d4ff);
+    border-color: #55e4ff;
+    color: #ffffff;
+    font-size: 17px;
+    padding: 16px 28px;
+    box-shadow: 0 6px 24px rgba(0, 212, 255, 0.4);
+}
+
+.btn-menu.primary:hover {
+    background: linear-gradient(135deg, #1184ff, #29ddff);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 30px rgba(0, 212, 255, 0.55);
+}
+
+.menu-footer {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 900px;
+    padding: 0 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #556782;
+}
+
+/* =========================================
+   MODALS (MODE SELECT, HOW TO PLAY, SETTINGS, ABOUT)
+   ========================================= */
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(7, 11, 18, 0.82);
+    backdrop-filter: blur(8px);
+    z-index: 30;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.2s ease forwards;
+}
+
+.modal-backdrop.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 540px;
+    padding: 28px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+}
+
+.modal-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #233147;
+    padding-bottom: 14px;
+}
+
+.modal-content {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: #b0c2de;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.modal-content h4 {
+    color: #ffffff;
+    margin: 12px 0 6px;
+    font-size: 14px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid #233147;
+    padding-top: 16px;
+}
+
+.btn-secondary {
+    padding: 10px 20px;
+    background: #1c2738;
+    border: 1px solid #31425e;
+    border-radius: 8px;
+    color: #e2ecfa;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+    background: #27374f;
+    border-color: #4b648f;
+    transform: translateY(-1px);
+}
+
+/* Mode Select Options */
+.mode-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+.mode-card {
+    padding: 18px 20px;
+    background: linear-gradient(180deg, #182335, #131c2b);
+    border: 1px solid #283952;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mode-card:hover {
+    background: linear-gradient(180deg, #22324b, #172437);
+    border-color: #00d4ff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 212, 255, 0.2);
+}
+
+.mode-info h3 {
+    font-size: 16px;
+    font-weight: 900;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.mode-info p {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.mode-icon {
+    font-size: 26px;
+}
+
+/* Settings Form */
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.setting-label {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.setting-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+input[type="range"] {
+    accent-color: var(--p1-blue);
+    cursor: pointer;
+}
+
+select {
+    padding: 6px 12px;
+    background: #172233;
+    border: 1px solid #2f405c;
+    border-radius: 6px;
+    color: white;
+    font-weight: 700;
+    outline: none;
+    cursor: pointer;
+}
+
+/* =========================================
+   2. CHARACTER & WEAPON SELECTION SCREEN
+   ========================================= */
+.select-overlay {
+    background: linear-gradient(180deg, rgba(10, 15, 24, 0.94) 0%, rgba(6, 10, 17, 0.98) 100%);
+    backdrop-filter: blur(10px);
+    padding: 16px 24px;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.select-header {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.select-title {
+    font-size: 26px;
+    font-weight: 950;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.select-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.players-selection-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+    max-width: 960px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+}
+
+.player-select-panel {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+}
+
+.player-select-panel.p1 {
+    border-color: rgba(0, 212, 255, 0.4);
+}
+
+.player-select-panel.p1.focused {
+    border-color: var(--p1-blue);
+    box-shadow: 0 0 25px var(--p1-glow);
+}
+
+.player-select-panel.p2 {
+    border-color: rgba(255, 51, 102, 0.4);
+}
+
+.player-select-panel.p2.focused {
+    border-color: var(--p2-red);
+    box-shadow: 0 0 25px var(--p2-glow);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.panel-player-name {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.ready-badge {
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    background: #1c2637;
+    color: #798da8;
+    border: 1px solid #2f3e58;
+}
+
+.ready-badge.is-ready {
+    background: #00e676;
+    color: #0b1d13;
+    border-color: #4efa9c;
+    box-shadow: 0 0 12px rgba(0, 230, 118, 0.5);
+}
+
+/* Live Character Preview Box */
+.character-preview-box {
+    width: 100%;
+    height: 140px;
+    background: radial-gradient(circle at center 60%, rgba(35, 48, 70, 0.4) 0%, rgba(13, 18, 27, 0.8) 80%);
+    border: 1px solid #26354b;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.preview-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Category Selection Blocks */
+.select-section {
+    margin-bottom: 10px;
+}
+
+.section-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.section-label.active-cat {
+    color: #ffffff;
+}
+
+.section-label.active-cat span {
+    color: #00e1ff;
+}
+
+/* Color Palettes */
+.color-palette-row {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 4px;
+    background: #131b28;
+    border-radius: 8px;
+    border: 1px solid #253347;
+}
+
+.color-swatch {
+    flex: 1;
+    height: 22px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.color-swatch:hover {
+    transform: scale(1.15);
+}
+
+.color-swatch.selected {
+    border-color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+    transform: scale(1.18);
+}
+
+/* Weapon Selector Card */
+.weapon-selector-card {
+    background: #131b28;
+    border: 1px solid #253347;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.weapon-title-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nav-arrow-btn {
+    background: #1f2c41;
+    border: 1px solid #364a6b;
+    border-radius: 6px;
+    color: white;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.15s ease;
+}
+
+.nav-arrow-btn:hover {
+    background: #2e4161;
+}
+
+.weapon-name-display {
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffffff;
+    text-align: center;
+}
+
+.weapon-desc-display {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    min-height: 28px;
+    line-height: 1.35;
+}
+
+/* Weapon Stats Bars */
+.weapon-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.stat-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: #202b3d;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    background: #00d4ff;
+    border-radius: 4px;
+}
+
+.panel-controls-hint {
+    padding: 8px 10px;
+    background: #101622;
+    border: 1px dashed #27364d;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #8da0bf;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* Select Screen Actions */
+.select-actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 960px;
+    padding-top: 14px;
+}
+
+.btn-start-battle {
+    padding: 14px 36px;
+    background: linear-gradient(135deg, #00d4ff, #0077ff);
+    border: 1px solid #66e4ff;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-start-battle:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 28px rgba(0, 212, 255, 0.6);
+}
+
+.btn-start-battle:active {
+    transform: translateY(1px);
+}
+
+/* =========================================
+   3. GAMEPLAY HUD LAYER (MENTOK ATAS & BAWAH)
+   ========================================= */
+.game-hud-layer {
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* TOPBAR: Menempel di paling atas */
+.game-hud-topbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    pointer-events: auto;
+    padding: 8px 20px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(180deg, rgba(13, 19, 30, 0.96) 0%, rgba(13, 19, 30, 0.88) 85%, rgba(13, 19, 30, 0) 100%);
+    backdrop-filter: blur(8px);
+    z-index: 20;
+}
+
+.hud-player-block {
+    min-width: 0;
+}
+
+.p2-block {
+    text-align: right;
+}
+
+.hud-player-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.p2-block .hud-player-meta {
+    flex-direction: row-reverse;
+}
+
+.player-name {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+}
+
+.hp-numeric {
+    font-size: 12px;
+    font-weight: bold;
+    color: #8fa0c0;
+    font-family: monospace;
+}
+
+.hp-track {
+    height: 14px;
+    background: #182130;
+    border-radius: 10px;
+    overflow: hidden;
+    padding: 2px;
+    border: 1px solid #28374d;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+}
+
+.hp-fill {
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hud-center-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.round-badge {
+    padding: 4px 14px;
+    background: #16202e;
+    border: 1px solid #29384e;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #9cb3d8;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.hud-quick-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.hud-quick-actions button {
+    padding: 5px 10px;
+    background: #1b2536;
+    border: 1px solid #32435c;
+    border-radius: 6px;
+    color: #e6edf8;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 11.5px;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hud-quick-actions button:hover {
+    background: #27364d;
+    border-color: #4b6287;
+    transform: translateY(-1px);
+}
+
+/* BOTTOMBAR: Mentok di paling bawah */
+.game-hud-bottombar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    pointer-events: auto;
+    background: linear-gradient(180deg, rgba(14, 20, 30, 0.88), rgba(9, 13, 21, 0.98));
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(8px);
+    padding: 6px 20px;
+    z-index: 20;
+}
+
+.hud-bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.control-box {
+    font-size: 11px;
+    line-height: 1.5;
+    color: #9cb0cc;
+}
+
+.control-box strong {
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.p2-ctrl {
+    text-align: right;
+}
+
+.footer-round-hint {
+    text-align: center;
+    font-size: 11px;
+    color: #7d90aa;
+    white-space: nowrap;
+}
+
+#announcement {
+    position: absolute;
+    top: 26%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 90%;
+    pointer-events: none;
+    text-shadow: 0 4px 18px rgba(0,0,0,0.85);
+    z-index: 5;
+    transition: opacity 0.3s ease;
+}
+
+#announcement h1 {
+    font-size: clamp(28px, 6vw, 54px);
+    margin: 0 0 6px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+#announcement p {
+    color: #c0d1ed;
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+@media (max-width: 768px) {
+    .players-selection-grid {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+    .character-preview-box {
+        height: 110px;
+    }
+    .game-hud-header {
+        padding: 6px 12px;
+    }
+    .hud-bar-grid {
+        padding: 6px 12px;
+        gap: 8px;
+    }
+    .controls {
+        padding: 6px 12px;
+    }
+}
+</style>
+</head>
+
+<body>
+<div class="app-container">
+
+    <!-- CANVAS FISIKA & PERTARUNGAN -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 1. LAYER MENU UTAMA -->
+    <section class="ui-layer active menu-overlay" id="mainMenuLayer">
+        <div class="menu-header">
+            <h1 class="game-title">STICKMAN <span class="blue">DU</span><span class="red">EL</span></h1>
+            <div class="game-subtitle">PHYSICS FIGHTING GAME</div>
+        </div>
+
+        <nav class="menu-nav">
+            <button class="btn-menu primary" id="btnMenuPlay">⚔️ PLAY</button>
+            <button class="btn-menu" id="btnMenuHowTo">📖 HOW TO PLAY</button>
+            <button class="btn-menu" id="btnMenuSettings">⚙️ SETTINGS</button>
+            <button class="btn-menu" id="btnMenuAbout">ℹ️ ABOUT</button>
+        </nav>
+
+        <footer class="menu-footer">
+            <span>VERSION 1.0</span>
+            <span>2D ACTIVE RAGDOLL ENGINE</span>
+        </footer>
+    </section>
+
+    <!-- MODAL MODE SELECTION -->
+    <div class="modal-backdrop" id="modalModeSelect">
+        <div class="modal-card">
+            <div class="modal-title">⚔️ PILIH MODE PERMAINAN</div>
+            <div class="mode-grid">
+                <div class="mode-card" id="modeLocal1v1">
+                    <div class="mode-info">
+                        <h3>LOCAL 1V1</h3>
+                        <p>Dua pemain saling bertarung di satu komputer dengan fisika ragdoll penuh.</p>
+                    </div>
+                    <div class="mode-icon">🎮</div>
+                </div>
+
+                <div class="mode-card" id="modeTraining">
+                    <div class="mode-info">
+                        <h3>TRAINING MODE</h3>
+                        <p>Latihan bebas melawan Dummy untuk menguasai kombo, bidikan 360°, dan pogo.</p>
+                    </div>
+                    <div class="mode-icon">🎯</div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" id="btnCloseMode">KEMBALI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL HOW TO PLAY -->
+    <div class="modal-backdrop" id="modalHowTo">
+        <div class="modal-card">
+            <div class="modal-title">📖 PANDUAN KONTROL & MEKANIK</div>
+            <div class="modal-content">
+                <h4>🎮 KONTROL PLAYER 1 (BIRU)</h4>
+                <p>
+                    <span class="key-tag">W</span> <span class="key-tag">A</span> <span class="key-tag">S</span> <span class="key-tag">D</span> : Arahkan Senjata 360° & Bergerak / Lompat<br>
+                    <span class="key-tag">F</span> : Serang (Tahan untuk Charge Magic Staff & Bow)
+                </p>
+
+                <h4>🎮 KONTROL PLAYER 2 (MERAH)</h4>
+                <p>
+                    <span class="key-tag">↑</span> <span class="key-tag">←</span> <span class="key-tag">↓</span> <span class="key-tag">→</span> : Arahkan Senjata 360° & Bergerak / Lompat<br>
+                    <span class="key-tag">ENTER</span> : Serang (Tahan untuk Charge Magic Staff & Bow)
+                </p>
+
+                <h4>⚡ 10 SENJATA UNIK & MEKANIK KHAS</h4>
+                <p>
+                    • <strong>10 Senjata Unik:</strong> Sword, Spear, Great Hammer, Magic Staff, Bow, Boomerang, Lightning Wand, Rocket Launcher, Shuriken, dan Flail.<br>
+                    • <strong>Mekanik Serang & Charge:</strong> Tekan F / ENTER untuk menyerang. Magic Staff dan Bow dapat di-charge dengan menahan tombol serang untuk daya & kecepatan ekstra.<br>
+                    • <strong>Efek Status & Fisika:</strong> Lightning Wand memberikan Stun 300ms, Rocket meledak area dengan radial knockback (pemilik kebal damage sendiri), Boomerang melukai 2 arah (pergi & pulang), dan Flail berayun nyata dengan constraint Matter.js.<br>
+                    • <strong>Sword Clash & Pogo Bounce:</strong> Aduan senjata melee menghasilkan dentingan logam, dan tusukan ke lantai memantulkan karakter ke udara!<br>
+                    • <strong>Ronde Baru:</strong> Setelah pemenang ditentukan, tekan tombol <span class="key-tag">SPASI</span> untuk ronde berikutnya.
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" id="btnCloseHowTo">KEMBALI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SETTINGS -->
+    <div class="modal-backdrop" id="modalSettings">
+        <div class="modal-card">
+            <div class="modal-title">⚙️ PENGATURAN</div>
+            <div class="modal-content">
+                <div class="setting-row">
+                    <span class="setting-label">Volume Suara</span>
+                    <div class="setting-ctrl">
+                        <input type="range" id="volumeSlider" min="0" max="100" value="80">
+                        <span id="volumeValue" style="font-size:12px;width:35px;">80%</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Efek Suara (SFX)</span>
+                    <div class="setting-ctrl">
+                        <button class="btn-secondary" id="btnToggleSoundSetting" style="padding:6px 14px;">🔊 AKTIF</button>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Kualitas Grafis</span>
+                    <div class="setting-ctrl">
+                        <select id="selectGraphics">
+                            <option value="high" selected>Tinggi (Full Partikel & Glow)</option>
+                            <option value="medium">Sedang (Standar)</option>
+                            <option value="low">Rendah (Hemat Performa)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Layar Penuh (Fullscreen)</span>
+                    <div class="setting-ctrl">
+                        <button class="btn-secondary" id="btnToggleFullscreen" style="padding:6px 14px;">⛶ FULLSCREEN</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" id="btnCloseSettings">KEMBALI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ABOUT -->
+    <div class="modal-backdrop" id="modalAbout">
+        <div class="modal-card">
+            <div class="modal-title">ℹ️ TENTANG GAME</div>
+            <div class="modal-content">
+                <h4>STICKMAN DUEL: PHYSICS FIGHTING</h4>
+                <p>
+                    Game pertarungan 2D berbasis fisika yang terinspirasi dari game legendaris <em>Supreme Duelist Stickman</em>. Dibuat dengan HTML5 Canvas, CSS3, JavaScript murni, dan Matter.js Physics Engine.
+                </p>
+                
+                <h4>FITUR UNGGULAN:</h4>
+                <p>
+                    • Active Ragdoll Controller dengan Postural Spring & Balance.<br>
+                    • Inverse Kinematics (IK 2 Sendi) untuk anatomi tangan dan kaki yang natural.<br>
+                    • Sistem Bidik Senjata Bebas 360 Derajat & Spin Thrust Dash.<br>
+                    • 10 Pilihan Senjata Unik (Sword, Spear, Great Hammer, Magic Staff, Bow, Boomerang, Lightning Wand, Rocket Launcher, Shuriken, Flail) dengan visual & karakteristik berbeda.<br>
+                    • Web Audio API Synthesizer tanpa dependensi file audio luar.
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" id="btnCloseAbout">KEMBALI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. LAYER PEMILIHAN KARAKTER & SENJATA -->
+    <section class="ui-layer select-overlay" id="charSelectLayer">
+        <div class="select-header">
+            <h2 class="select-title">PILIH WARNA & SENJATA</h2>
+            <div class="select-subtitle">SESUAIKAN PETARUNG ANDA SEBELUM BERDUEL</div>
+        </div>
+
+        <div class="players-selection-grid">
+            <!-- PANEL PLAYER 1 -->
+            <div class="player-select-panel p1 focused" id="panelP1">
+                <div class="panel-header">
+                    <span class="panel-player-name" style="color:var(--p1-blue)">PLAYER 1</span>
+                    <span class="ready-badge" id="readyP1">READY</span>
+                </div>
+
+                <!-- Preview Box P1 -->
+                <div class="character-preview-box">
+                    <canvas id="previewCanvasP1" class="preview-canvas" width="280" height="140"></canvas>
+                </div>
+
+                <!-- Category 1: Warna -->
+                <div class="select-section">
+                    <div class="section-label" id="catLabelColorP1">
+                        <span>WARNA</span>
+                        <small id="colorNameP1">CYAN</small>
+                    </div>
+                    <div class="color-palette-row" id="paletteP1"></div>
+                </div>
+
+                <!-- Category 2: Senjata -->
+                <div class="select-section">
+                    <div class="section-label" id="catLabelWeaponP1">
+                        <span>SENJATA</span>
+                        <small>PILIHAN SENJATA</small>
+                    </div>
+                    <div class="weapon-selector-card">
+                        <div class="weapon-title-nav">
+                            <button class="nav-arrow-btn" id="p1WepPrev">◀</button>
+                            <span class="weapon-name-display" id="weaponNameP1">SWORD</span>
+                            <button class="nav-arrow-btn" id="p1WepNext">▶</button>
+                        </div>
+                        <div class="weapon-desc-display" id="weaponDescP1">
+                            Seimbang dalam jangkauan dan kecepatan tebasan.
+                        </div>
+                        <div class="weapon-stats">
+                            <div class="stat-item">
+                                <span>RANGE</span>
+                                <div class="stat-bar-bg"><div class="stat-bar-fill" id="statRangeP1" style="width:65%;"></div></div>
+                            </div>
+                            <div class="stat-item">
+                                <span>SPEED</span>
+                                <div class="stat-bar-bg"><div class="stat-bar-fill" id="statSpeedP1" style="width:75%;background:#ffca28;"></div></div>
+                            </div>
+                            <div class="stat-item">
+                                <span>DMG</span>
+                                <div class="stat-bar-bg"><div class="stat-bar-fill" id="statDmgP1" style="width:60%;background:#ff5252;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Petunjuk Kontrol P1 -->
+                <div class="panel-controls-hint">
+                    <span class="key-tag">W</span> / <span class="key-tag">S</span> : Pindah Kategori |
+                    <span class="key-tag">A</span> / <span class="key-tag">D</span> : Ubah Pilihan |
+                    <span class="key-tag">F</span> : Siap
+                </div>
+            </div>
+
+            <!-- PANEL PLAYER 2 -->
+            <div class="player-select-panel p2" id="panelP2">
+                <div class="panel-header">
+                    <span class="panel-player-name" id="nameTitleP2" style="color:var(--p2-red)">PLAYER 2</span>
+                    <span class="ready-badge" id="readyP2">READY</span>
+                </div>
+
+                <!-- Preview Box P2 -->
+                <div class="character-preview-box">
+                    <canvas id="previewCanvasP2" class="preview-canvas" width="280" height="140"></canvas>
+                </div>
+
+                <!-- Category 1: Warna -->
+                <div class="select-section">
+                    <div class="section-label" id="catLabelColorP2">
+                        <span>WARNA</span>
+                        <small id="colorNameP2">RED</small>
+                    </div>
+                    <div class="color-palette-row" id="paletteP2"></div>
+                </div>
+
+                <!-- Category 2: Senjata -->
+                <div class="select-section">
+                    <div class="section-label" id="catLabelWeaponP2">
+                        <span>SENJATA</span>
+                        <small>PILIHAN SENJATA</small>
+                    </div>
+                    <div class="weapon-selector-card">
+                        <div class="weapon-title-nav">
+                            <button class="nav-arrow-btn" id="p2WepPrev">◀</button>
+                            <span class="weapon-name-display" id="weaponNameP2">SWORD</span>
+                            <button class="nav-arrow-btn" id="p2WepNext">▶</button>
+                        </div>
+                        <div class="weapon-desc-display" id="weaponDescP2">
+                            Seimbang dalam jangkauan dan kecepatan tebasan.
+                        </div>
+                        <div class="weapon-stats">
+                            <div class="stat-item">
+                                <span>RANGE</span>
+                                <div class="stat-bar-bg"><div class="stat-bar-fill" id="statRangeP2" style="width:65%;"></div></div>
+                            </div>
+                            <div class="stat-item">
+                                <span>SPEED</span>
+                                <div class="stat-bar-bg"><div class="stat-bar-fill" id="statSpeedP2" style="width:75%;background:#ffca28;"></div></div>
+                            </div>
+                            <div class="stat-item">
+                                <span>DMG</span>
+                                <div class="stat-bar-bg"><div class="stat-bar-fill" id="statDmgP2" style="width:60%;background:#ff5252;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Petunjuk Kontrol P2 -->
+                <div class="panel-controls-hint">
+                    <span class="key-tag">↑</span> / <span class="key-tag">↓</span> : Pindah Kategori |
+                    <span class="key-tag">←</span> / <span class="key-tag">→</span> : Ubah Pilihan |
+                    <span class="key-tag">ENTER</span> : Siap
+                </div>
+            </div>
+        </div>
+
+        <div class="select-actions-bar">
+            <button class="btn-secondary" id="btnBackToMode">◀ KEMBALI</button>
+            <button class="btn-start-battle" id="btnStartBattle">⚔️ START BATTLE</button>
+        </div>
+    </section>
+
+    <!-- 3. LAYER GAMEPLAY HUD (MENTOK PALING ATAS & PALING BAWAH) -->
+    <section class="ui-layer game-hud-layer" id="gameplayHudLayer">
+        <!-- TOPBAR: Menempel di paling atas -->
+        <header class="game-hud-topbar">
+            <!-- Player 1 HP Block -->
+            <div class="hud-player-block p1-block">
+                <div class="hud-player-meta">
+                    <span class="player-name" id="hudNameP1" style="color:var(--p1-blue)">PLAYER 1</span>
+                    <span id="hp1-val" class="hp-numeric">100 HP</span>
+                </div>
+                <div class="hp-track">
+                    <div id="hp1" class="hp-fill"></div>
+                </div>
+            </div>
+
+            <!-- Center Badge & Actions -->
+            <div class="hud-center-block">
+                <div class="round-badge" id="roundBadge">ROUND 1</div>
+                <div class="hud-quick-actions">
+                    <button id="btnReturnMenu">🏠 Menu</button>
+                    <button id="btnHudAudio">🔊 Suara: ON</button>
+                    <button id="btnHudRestart">↻ Ulang</button>
+                </div>
+            </div>
+
+            <!-- Player 2 HP Block -->
+            <div class="hud-player-block p2-block">
+                <div class="hud-player-meta">
+                    <span class="player-name" id="hudNameP2" style="color:var(--p2-red)">PLAYER 2</span>
+                    <span id="hp2-val" class="hp-numeric">100 HP</span>
+                </div>
+                <div class="hp-track">
+                    <div id="hp2" class="hp-fill"></div>
+                </div>
+            </div>
+        </header>
+
+        <div id="announcement">
+            <h1 style="color:#00f0ff">GET READY!</h1>
+            <p>Pertarungan dimulai...</p>
+        </div>
+
+        <!-- BOTTOMBAR: Mentok di paling bawah -->
+        <footer class="game-hud-bottombar">
+            <div class="hud-bottom-grid">
+                <div class="control-box p1-ctrl">
+                    <strong id="ctrlNameP1" style="color:var(--p1-blue)">PLAYER 1</strong>
+                    <span class="key-tag">W</span> <span class="key-tag">A</span> <span class="key-tag">S</span> <span class="key-tag">D</span> Bidik & Gerak |
+                    <span class="key-tag">F</span> Serang / Charge
+                </div>
+
+                <div class="footer-round-hint">
+                    Setelah menang: tekan <span class="key-tag" style="color:#00f0ff;font-weight:bold;">SPASI</span> untuk ronde baru
+                </div>
+
+                <div class="control-box p2-ctrl">
+                    <strong id="ctrlNameP2" style="color:var(--p2-red)">PLAYER 2</strong>
+                    <span class="key-tag">↑</span> <span class="key-tag">←</span> <span class="key-tag">↓</span> <span class="key-tag">→</span> Bidik & Gerak |
+                    <span class="key-tag">ENTER</span> Serang / Charge
+                </div>
+            </div>
+        </footer>
+    </section>
+
+</div>
+
+<script>
+(() => {
+    "use strict";
+
+    if (!window.Matter) {
+        alert("Library Matter.js gagal dimuat. Periksa koneksi internet.");
+        return;
+    }
+
+    const { Engine, Bodies, Body, Composite, Constraint } = Matter;
+
+    // --- DATA DEFINISI 10 SENJATA LENGKAP & MODULAR ---
+    const WEAPONS = [
+        {
+            id: "sword",
+            name: "Sword",
+            desc: "Pedang seimbang dengan tebasan cepat dan sapuan busur tajam.",
+            type: "melee",
+            length: 56,
+            damage: 12,
+            cooldown: 400,
+            activeDuration: 250,
+            range: 65,
+            knockback: 0.055,
+            rangeStat: 65,
+            speedStat: 80,
+            dmgStat: 55
+        },
+        {
+            id: "spear",
+            name: "Spear",
+            desc: "Tombak jangkauan jauh dengan tusukan lurus mematikan.",
+            type: "melee_thrust",
+            length: 82,
+            damage: 18,
+            cooldown: 700,
+            activeDuration: 180,
+            range: 105,
+            knockback: 0.065,
+            rangeStat: 95,
+            speedStat: 65,
+            dmgStat: 70
+        },
+        {
+            id: "hammer",
+            name: "Great Hammer",
+            desc: "Palu raksasa penghancur keseimbangan dengan knockback dahsyat.",
+            type: "melee_heavy",
+            length: 58,
+            damage: 25,
+            cooldown: 1100,
+            activeDuration: 350,
+            range: 75,
+            knockback: 0.12,
+            rangeStat: 75,
+            speedStat: 40,
+            dmgStat: 98
+        },
+        {
+            id: "staff",
+            name: "Magic Staff",
+            desc: "Tongkat mistis penembak bola energi sihir. Tahan tombol untuk charge!",
+            type: "projectile_magic",
+            length: 64,
+            damage: 12,
+            maxDamage: 20,
+            cooldown: 650,
+            activeDuration: 700,
+            range: 650,
+            projSpeed: 8,
+            knockback: 0.05,
+            rangeStat: 85,
+            speedStat: 70,
+            dmgStat: 60
+        },
+        {
+            id: "bow",
+            name: "Bow",
+            desc: "Busur panah presisi berlintasan melengkung. Tahan tombol untuk charge!",
+            type: "projectile_bow",
+            length: 50,
+            damage: 18,
+            maxDamage: 26,
+            cooldown: 900,
+            activeDuration: 1000,
+            range: 800,
+            projSpeed: 12,
+            knockback: 0.06,
+            rangeStat: 90,
+            speedStat: 60,
+            dmgStat: 80
+        },
+        {
+            id: "boomerang",
+            name: "Boomerang",
+            desc: "Senjata lempar melengkung yang kembali ke pemilik dan melukai bolak-balik.",
+            type: "projectile_boomerang",
+            length: 38,
+            damage: 10,
+            cooldown: 800,
+            activeDuration: 500,
+            range: 350,
+            projSpeed: 8.5,
+            knockback: 0.045,
+            rangeStat: 60,
+            speedStat: 75,
+            dmgStat: 50
+        },
+        {
+            id: "lightning",
+            name: "Lightning Wand",
+            desc: "Tongkat petir instan berjangkauan 450px dengan efek stun 300 ms.",
+            type: "hitscan",
+            length: 46,
+            damage: 14,
+            cooldown: 1400,
+            activeDuration: 300,
+            range: 450,
+            knockback: 0.035,
+            stunDuration: 300,
+            rangeStat: 70,
+            speedStat: 85,
+            dmgStat: 65
+        },
+        {
+            id: "rocket",
+            name: "Rocket Launcher",
+            desc: "Peluncur roket eksplosif berdaya ledak area 100px dan impuls radial.",
+            type: "projectile_explosive",
+            length: 52,
+            damage: 16,
+            maxDamage: 25,
+            cooldown: 1600,
+            activeDuration: 400,
+            range: 700,
+            projSpeed: 7,
+            blastRadius: 100,
+            knockback: 0.09,
+            rangeStat: 88,
+            speedStat: 35,
+            dmgStat: 95
+        },
+        {
+            id: "shuriken",
+            name: "Shuriken",
+            desc: "Senjata ninja melempar 3 bintang tajam berurutan dengan sebaran sudut.",
+            type: "projectile_multi",
+            length: 36,
+            damage: 5,
+            cooldown: 1000,
+            activeDuration: 300,
+            range: 600,
+            projSpeed: 11,
+            count: 3,
+            burstDelay: 100,
+            knockback: 0.03,
+            rangeStat: 80,
+            speedStat: 90,
+            dmgStat: 60
+        },
+        {
+            id: "flail",
+            name: "Flail",
+            desc: "Bola besi berduri dengan rantai fisik Matter.js yang berayun mematikan.",
+            type: "physics_flail",
+            length: 75,
+            damage: 16,
+            cooldown: 800,
+            activeDuration: 400,
+            range: 85,
+            knockback: 0.08,
+            chainLength: 75,
+            rangeStat: 75,
+            speedStat: 55,
+            dmgStat: 75
+        }
+    ];
+
+    // --- DATA PILIHAN WARNA (8 WARNA ELEGAN) ---
+    const COLORS = [
+        { name: "Cyan", hex: "#00f0ff" },
+        { name: "Red", hex: "#ff3366" },
+        { name: "Green", hex: "#00e676" },
+        { name: "Yellow", hex: "#ffea00" },
+        { name: "Purple", hex: "#b388ff" },
+        { name: "Blue", hex: "#1689ff" },
+        { name: "Orange", hex: "#ff9100" },
+        { name: "White", hex: "#f0f4f8" }
+    ];
+
+    // --- SOUND ENGINE (Web Audio API Synthesizer) ---
+    class SoundEngine {
+        constructor() {
+            this.ctx = null;
+            this.muted = false;
+            this.volume = 0.8;
+        }
+
+        init() {
+            if (!this.ctx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) this.ctx = new AudioCtx();
+            }
+            if (this.ctx && this.ctx.state === "suspended") {
+                this.ctx.resume();
+            }
+        }
+
+        playTone(freqStart, freqEnd, duration, type = "sine", gainLevel = 0.2) {
+            if (this.muted || this.volume <= 0) return;
+            this.init();
+            if (!this.ctx) return;
+
+            try {
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = type;
+                osc.frequency.setValueAtTime(freqStart, now);
+                osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
+
+                const finalGain = gainLevel * this.volume;
+                gain.gain.setValueAtTime(finalGain, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + duration);
+            } catch (e) {}
+        }
+
+        playJump() { this.playTone(220, 580, 0.18, "triangle", 0.22); }
+        playSwing() { this.playTone(480, 150, 0.15, "sawtooth", 0.16); }
+        playHeavySwing() { this.playTone(260, 60, 0.26, "sawtooth", 0.28); }
+        playThrust() { this.playTone(560, 240, 0.13, "triangle", 0.22); }
+        playSpin() { this.playTone(300, 850, 0.22, "sawtooth", 0.25); }
+        playHit() {
+            this.playTone(160, 40, 0.22, "square", 0.35);
+            this.playTone(380, 80, 0.18, "sawtooth", 0.28);
+        }
+        playClash() {
+            this.playTone(1300, 950, 0.25, "sine", 0.38);
+            this.playTone(1800, 1200, 0.20, "triangle", 0.28);
+        }
+        playBounce() { this.playTone(120, 260, 0.12, "sine", 0.22); }
+        playWin() {
+            this.playTone(340, 680, 0.20, "triangle", 0.25);
+            setTimeout(() => this.playTone(510, 1020, 0.38, "triangle", 0.3), 190);
+        }
+        playMenuNav() { this.playTone(540, 720, 0.06, "sine", 0.1); }
+        playMenuSelect() { this.playTone(400, 880, 0.12, "triangle", 0.18); }
+        playShoot(pitch = 1) { this.playTone(600 * pitch, 200 * pitch, 0.12, "sine", 0.22); }
+        playBowRelease(pitch = 1) { this.playTone(380 * pitch, 140 * pitch, 0.15, "triangle", 0.24); }
+        playExplosion() {
+            this.playTone(180, 30, 0.45, "square", 0.42);
+            this.playTone(90, 20, 0.55, "sawtooth", 0.36);
+        }
+        playLightning() {
+            this.playTone(950, 180, 0.22, "sawtooth", 0.32);
+            this.playTone(1500, 320, 0.16, "square", 0.22);
+        }
+        playChargeHum() {
+            this.playTone(320, 640, 0.08, "sine", 0.08);
+        }
+    }
+
+    const sound = new SoundEngine();
+
+    // --- GAME ENGINE & STATE ---
+    let currentGameState = "MENU"; // "MENU" | "SELECT" | "PLAYING"
+    let gameMode = "LOCAL1V1"; // "LOCAL1V1" | "TRAINING"
+    let graphicQuality = "high"; // "high" | "medium" | "low"
+
+    // Selection State
+    const selection = {
+        p1: {
+            colorIdx: 0, // Cyan
+            weaponIdx: 0, // Sword
+            ready: true,
+            activeCategory: "color" // "color" | "weapon"
+        },
+        p2: {
+            colorIdx: 1, // Red
+            weaponIdx: 0, // Sword
+            ready: true,
+            activeCategory: "color"
+        }
+    };
+
+    const canvas = document.querySelector("#gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const announcement = document.querySelector("#announcement");
+
+    const engine = Engine.create({ enableSleeping: false });
+    engine.gravity.y = 0.92;
+    engine.positionIterations = 8;
+    engine.velocityIterations = 8;
+    const world = engine.world;
+
+    let width = 900;
+    let height = 500;
+    let floorY = 440;
+    let ceilingY = 56;
+    let walls = [];
+    let players = [];
+    let projectiles = [];
+    let explosions = [];
+    let lightningEffects = [];
+    let particles = [];
+    let floatingTexts = [];
+    let round = 1;
+    let gameEnded = false;
+    let countdown = 50;
+    let lastTime = 0;
+    let accumulator = 0;
+    let screenShake = 0;
+    let hitStop = 0;
+    let projIdCounter = 0;
+
+    const keys = Object.create(null);
+    const STEP = 1000 / 60;
+
+    // --- RESIZE ---
+    function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = Math.max(320, window.innerWidth);
+        height = Math.max(260, window.innerHeight);
+        floorY = height - 42;
+
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        ceilingY = 56;
+        if (walls.length >= 4) {
+            Body.setPosition(walls[0], { x: width / 2, y: floorY + 40 });
+            Body.setPosition(walls[1], { x: -25, y: height / 2 });
+            Body.setPosition(walls[2], { x: width + 25, y: height / 2 });
+            Body.setPosition(walls[3], { x: width / 2, y: ceilingY - 30 });
+        }
+    }
+
+    function makeWalls() {
+        walls = [
+            Bodies.rectangle(width / 2, floorY + 40, width + 400, 80, {
+                isStatic: true,
+                label: "floor",
+                friction: 0.8,
+                restitution: 0.1,
+                collisionFilter: { category: 0x0001, mask: 0xFFFF }
+            }),
+            Bodies.rectangle(-25, height / 2, 50, height * 4, {
+                isStatic: true,
+                label: "wall-left",
+                friction: 0.1,
+                restitution: 0.3,
+                collisionFilter: { category: 0x0001, mask: 0xFFFF }
+            }),
+            Bodies.rectangle(width + 25, height / 2, 50, height * 4, {
+                isStatic: true,
+                label: "wall-right",
+                friction: 0.1,
+                restitution: 0.3,
+                collisionFilter: { category: 0x0001, mask: 0xFFFF }
+            }),
+            // Langit-langit pembatas tepat di bawah menu bar HP di atas
+            Bodies.rectangle(width / 2, ceilingY - 30, width + 400, 60, {
+                isStatic: true,
+                label: "ceiling",
+                friction: 0.2,
+                restitution: 0.25,
+                collisionFilter: { category: 0x0001, mask: 0xFFFF }
+            })
+        ];
+        Composite.add(world, walls);
+    }
+
+    // --- IK 2 SENDI & GEOMETRY HELPERS ---
+    function solveIK(root, target, len1, len2, bendSign = 1) {
+        const dx = target.x - root.x;
+        const dy = target.y - root.y;
+        let dist = Math.hypot(dx, dy);
+        dist = Math.max(1, Math.min(dist, len1 + len2 - 0.5));
+
+        const baseAngle = Math.atan2(dy, dx);
+        const cosA = (len1 * len1 + dist * dist - len2 * len2) / (2 * len1 * dist);
+        const clampedCosA = Math.max(-1, Math.min(1, cosA));
+        const angleA = Math.acos(clampedCosA);
+
+        const jointAngle = baseAngle + bendSign * angleA;
+        return {
+            x: root.x + Math.cos(jointAngle) * len1,
+            y: root.y + Math.sin(jointAngle) * len1
+        };
+    }
+
+    function angleLerp(a0, a1, t) {
+        const da = (a1 - a0) % (Math.PI * 2);
+        const diff = (2 * da) % (Math.PI * 2) - da;
+        return a0 + diff * t;
+    }
+
+    function distance(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function pointSegmentDistance(point, a, b) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const lenSq = dx * dx + dy * dy;
+        if (!lenSq) return distance(point, a);
+        const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq));
+        return distance(point, { x: a.x + t * dx, y: a.y + t * dy });
+    }
+
+    function linesIntersect(p1, p2, p3, p4) {
+        const ccw = (A, B, C) => (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+        return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
+    }
+
+    function generateLightningSegments(x1, y1, x2, y2) {
+        const segments = [{ x: x1, y: y1 }];
+        const count = 7;
+        const dx = (x2 - x1) / count;
+        const dy = (y2 - y1) / count;
+        const perpX = -dy;
+        const perpY = dx;
+        const perpLen = Math.hypot(perpX, perpY) || 1;
+
+        for (let i = 1; i < count; i++) {
+            const offset = (Math.random() - 0.5) * 18;
+            segments.push({
+                x: x1 + dx * i + (perpX / perpLen) * offset,
+                y: y1 + dy * i + (perpY / perpLen) * offset
+            });
+        }
+        segments.push({ x: x2, y: y2 });
+        return segments;
+    }
+
+    // --- CREATE STICKMAN PLAYER ---
+    function createPlayer(id, x, color, weaponObj, facing, controls, isDummy = false) {
+        const standY = floorY - 58;
+
+        const headPart = Bodies.circle(x, standY - 24, 13, {
+            density: 0.003,
+            label: `p${id}-head-part`
+        });
+
+        const torsoPart = Bodies.rectangle(x, standY + 6, 16, 40, {
+            chamfer: { radius: 8 },
+            density: 0.0045,
+            label: `p${id}-torso-part`
+        });
+
+        const body = Body.create({
+            parts: [torsoPart, headPart],
+            collisionFilter: { category: 0x0002, mask: 0x0001 },
+            friction: 0.15,
+            frictionAir: 0.02,
+            restitution: 0.08
+        });
+
+        Composite.add(world, body);
+
+        const initialAngle = facing === 1 ? 0 : Math.PI;
+
+        // Flail setup if weapon is flail
+        let flailBall = null;
+        let flailConstraint = null;
+
+        if (weaponObj.id === "flail") {
+            flailBall = Bodies.circle(x + facing * 45, standY - 10, 13, {
+                density: 0.0075,
+                frictionAir: 0.012,
+                restitution: 0.35,
+                collisionFilter: { category: 0x0004, mask: 0x0001 },
+                label: `p${id}-flail-ball`
+            });
+
+            flailConstraint = Constraint.create({
+                pointA: { x: x + facing * 24, y: standY - 10 },
+                bodyB: flailBall,
+                length: 68,
+                stiffness: 0.5,
+                damping: 0.08
+            });
+
+            Composite.add(world, [flailBall, flailConstraint]);
+        }
+
+        return {
+            id,
+            color,
+            weapon: weaponObj,
+            weaponLength: weaponObj.length,
+            facing,
+            controls,
+            body,
+            hp: 100,
+            maxHp: 100,
+            alive: true,
+            grounded: true,
+            coyoteTimer: 0,
+            jumpCooldown: 0,
+            walkCycle: 0,
+            isMoving: false,
+            aimAngle: initialAngle,
+            targetAimAngle: initialAngle,
+            spinTimer: 0,
+            spinDuration: 22,
+            spinSpeed: 0,
+            invulnerability: 0,
+            slashTrail: [],
+            isDummy,
+            scarfJoints: [
+                { x: x - facing * 12, y: standY - 26 },
+                { x: x - facing * 20, y: standY - 24 },
+                { x: x - facing * 28, y: standY - 22 }
+            ],
+            // Modular Attack State & Cooldowns
+            nextAttackTime: 0,
+            isAttacking: false,
+            attackStartTime: 0,
+            attackDuration: 0,
+            attackId: 0,
+            attackHitTargets: new Set(),
+            isCharging: false,
+            chargeStartTime: 0,
+            chargeProgress: 0,
+            stunTimer: 0,
+            flailBall,
+            flailConstraint
+        };
+    }
+
+    // --- SKELETON CALCULATOR ---
+    function getStickmanSkeleton(p) {
+        const pos = p.body.position;
+        const angle = p.body.angle;
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+
+        const localToWorld = (ox, oy) => ({
+            x: pos.x + ox * cosA - oy * sinA,
+            y: pos.y + ox * sinA + oy * cosA
+        });
+
+        return {
+            head: localToWorld(0, -25),
+            neck: localToWorld(0, -14),
+            shoulder: localToWorld(p.facing * 5, -10),
+            backShoulder: localToWorld(-p.facing * 5, -10),
+            pelvis: localToWorld(0, 16),
+            hipFront: localToWorld(p.facing * 4, 18),
+            hipBack: localToWorld(-p.facing * 4, 18),
+            pos, angle
+        };
+    }
+
+    // --- SWORD & WEAPON IK COORDINATES ---
+    function getSword(p, skel) {
+        const shoulder = skel.shoulder;
+        const handDist = 24;
+        let aimAngle = p.aimAngle;
+        let extraHandDist = 0;
+        const now = performance.now();
+
+        // Animate melee weapon during active attack
+        if (p.spinTimer <= 0 && p.isAttacking && now < p.attackStartTime + p.attackDuration) {
+            const prog = Math.min(1, (now - p.attackStartTime) / p.attackDuration);
+            if (p.weapon.id === "spear") {
+                // Straight thrust forward and retract
+                extraHandDist = Math.sin(prog * Math.PI) * 35;
+            } else if (p.weapon.id === "sword") {
+                // Arc swing sweep
+                const swingOffset = (prog - 0.5) * 1.25 * p.facing;
+                aimAngle += swingOffset;
+            } else if (p.weapon.id === "hammer") {
+                // Heavy windup and slam
+                let swingOffset = 0;
+                if (prog < 0.25) {
+                    swingOffset = -0.35 * (prog / 0.25) * p.facing;
+                } else {
+                    const forwardProg = (prog - 0.25) / 0.75;
+                    swingOffset = (-0.35 + forwardProg * 1.3) * p.facing;
+                }
+                aimAngle += swingOffset;
+            }
+        }
+
+        const hand = {
+            x: shoulder.x + Math.cos(aimAngle) * (handDist + extraHandDist),
+            y: shoulder.y + Math.sin(aimAngle) * (handDist + extraHandDist)
+        };
+
+        const tip = {
+            x: hand.x + Math.cos(aimAngle) * p.weaponLength,
+            y: hand.y + Math.sin(aimAngle) * p.weaponLength
+        };
+
+        return { hand, tip, angle: aimAngle, shoulder };
+    }
+
+    // --- MODULAR WEAPON ATTACK TRIGGERS ---
+    function executeWeaponAttack(p, now) {
+        if (currentGameState !== "PLAYING" || gameEnded || countdown > 0 || !p.alive || p.stunTimer > 0) return;
+        if (now < p.nextAttackTime) return;
+
+        const wep = p.weapon;
+        p.nextAttackTime = now + wep.cooldown;
+        p.attackId++;
+        p.attackHitTargets.clear();
+
+        const skel = getStickmanSkeleton(p);
+        const sword = getSword(p, skel);
+
+        // SENJATA JARAK DEKAT (Sword, Spear, Hammer, Flail) MUTER-MUTER 360 DERAJAT TORNADO!
+        if (wep.type.startsWith("melee") || wep.id === "flail") {
+            triggerSpinAttack(p);
+            return;
+        }
+
+        switch (wep.id) {
+            case "sword":
+                p.isAttacking = true;
+                p.attackStartTime = now;
+                p.attackDuration = wep.activeDuration; // 250ms
+                sound.playSwing();
+                Body.applyForce(p.body, p.body.position, {
+                    x: Math.cos(p.aimAngle) * 0.025,
+                    y: Math.sin(p.aimAngle) * 0.015 - 0.01
+                });
+                break;
+
+            case "spear":
+                p.isAttacking = true;
+                p.attackStartTime = now;
+                p.attackDuration = wep.activeDuration; // 180ms
+                sound.playThrust();
+                Body.applyForce(p.body, p.body.position, {
+                    x: Math.cos(p.aimAngle) * 0.035,
+                    y: Math.sin(p.aimAngle) * 0.02 - 0.01
+                });
+                break;
+
+            case "hammer":
+                p.isAttacking = true;
+                p.attackStartTime = now;
+                p.attackDuration = wep.activeDuration; // 350ms
+                sound.playHeavySwing();
+                // Slam lunge with slight recoil
+                Body.applyForce(p.body, p.body.position, {
+                    x: Math.cos(p.aimAngle) * 0.022,
+                    y: -0.012
+                });
+                break;
+
+            case "boomerang":
+                sound.playShoot(0.9);
+                spawnBoomerang(p, sword.hand, p.aimAngle);
+                break;
+
+            case "lightning":
+                executeLightningAttack(p, sword.hand, p.aimAngle);
+                break;
+
+            case "rocket":
+                sound.playShoot(0.65);
+                spawnRocket(p, sword.hand, p.aimAngle);
+                // Slight shooter recoil
+                Body.applyForce(p.body, p.body.position, {
+                    x: -Math.cos(p.aimAngle) * 0.02,
+                    y: 0.01
+                });
+                break;
+
+            case "shuriken":
+                executeShurikenBurst(p, sword.hand, p.aimAngle);
+                break;
+
+            case "flail":
+                sound.playHeavySwing();
+                if (p.flailBall) {
+                    const whipForce = 0.065;
+                    Body.applyForce(p.flailBall, p.flailBall.position, {
+                        x: Math.cos(p.aimAngle) * whipForce,
+                        y: Math.sin(p.aimAngle) * whipForce - 0.025
+                    });
+                }
+                break;
+        }
+    }
+
+    function executeChargedAttack(p, now, chargeMs) {
+        if (currentGameState !== "PLAYING" || gameEnded || countdown > 0 || !p.alive || p.stunTimer > 0) return;
+        if (now < p.nextAttackTime) return;
+
+        const wep = p.weapon;
+        const skel = getStickmanSkeleton(p);
+        const sword = getSword(p, skel);
+
+        if (wep.id === "staff") {
+            const chargeRatio = Math.min(1, chargeMs / wep.activeDuration);
+            const dmg = Math.round(wep.damage + chargeRatio * (wep.maxDamage - wep.damage)); // 12 -> 20
+            p.nextAttackTime = now + wep.cooldown;
+            sound.playShoot(1.1 + chargeRatio * 0.3);
+            spawnMagicOrb(p, sword.hand, p.aimAngle, dmg, chargeRatio);
+        } else if (wep.id === "bow") {
+            const chargeRatio = Math.min(1, chargeMs / wep.activeDuration);
+            const dmg = Math.round(wep.damage + chargeRatio * (wep.maxDamage - wep.damage)); // 18 -> 26
+            const speed = wep.projSpeed + chargeRatio * 5; // 12 -> 17
+            p.nextAttackTime = now + wep.cooldown;
+            sound.playBowRelease(1.0 + chargeRatio * 0.3);
+            spawnArrow(p, sword.hand, p.aimAngle, dmg, speed, chargeRatio);
+        }
+    }
+
+    function executeShurikenBurst(p, hand, aimAngle) {
+        sound.playShoot(1.4);
+        const angles = [-0.09, 0, 0.09];
+        angles.forEach((offset, idx) => {
+            if (idx === 0) {
+                spawnShuriken(p, hand, aimAngle + offset);
+            } else {
+                setTimeout(() => {
+                    if (currentGameState === "PLAYING" && p.alive && !gameEnded) {
+                        const curSkel = getStickmanSkeleton(p);
+                        const curSword = getSword(p, curSkel);
+                        sound.playShoot(1.4 + idx * 0.1);
+                        spawnShuriken(p, curSword.hand, p.aimAngle + offset);
+                    }
+                }, idx * 100);
+            }
+        });
+    }
+
+    function executeLightningAttack(p, hand, aimAngle) {
+        sound.playLightning();
+        const maxRange = 450;
+        const cosA = Math.cos(aimAngle);
+        const sinA = Math.sin(aimAngle);
+
+        let endX = hand.x + cosA * maxRange;
+        let endY = hand.y + sinA * maxRange;
+
+        // Clip to floor & walls
+        if (sinA > 0 && endY > floorY) {
+            const t = (floorY - hand.y) / sinA;
+            endX = hand.x + cosA * t;
+            endY = floorY;
+        }
+        if (cosA < 0 && endX < 0) {
+            const t = (0 - hand.x) / cosA;
+            endX = 0;
+            endY = hand.y + sinA * t;
+        }
+        if (cosA > 0 && endX > width) {
+            const t = (width - hand.x) / cosA;
+            endX = width;
+            endY = hand.y + sinA * t;
+        }
+
+        let hitOpponent = false;
+        let hitPoint = { x: endX, y: endY };
+        const opponent = players.find(other => other.id !== p.id && other.alive);
+
+        if (opponent && opponent.invulnerability <= 0) {
+            const oppSkel = getStickmanSkeleton(opponent);
+            const targets = [
+                { pt: oppSkel.head, r: 16 },
+                { pt: { x: (oppSkel.neck.x + oppSkel.pelvis.x) / 2, y: (oppSkel.neck.y + oppSkel.pelvis.y) / 2 }, r: 18 },
+                { pt: oppSkel.pelvis, r: 16 }
+            ];
+
+            for (const t of targets) {
+                const d = pointSegmentDistance(t.pt, hand, { x: endX, y: endY });
+                if (d < t.r + 14) {
+                    const dot = (t.pt.x - hand.x) * cosA + (t.pt.y - hand.y) * sinA;
+                    if (dot > 0) {
+                        hitOpponent = true;
+                        hitPoint = { x: t.pt.x, y: t.pt.y };
+                        break;
+                    }
+                }
+            }
+
+            if (hitOpponent) {
+                const dmg = p.weapon.damage; // 14
+                opponent.hp = Math.max(0, opponent.hp - dmg);
+                opponent.invulnerability = 16;
+                opponent.stunTimer = 18; // 300ms stun (18 frames)
+
+                spawnParticles(hitPoint.x, hitPoint.y, 20, "#00f0ff", 7, "spark");
+                spawnParticles(hitPoint.x, hitPoint.y, 10, "#ffffff", 6, "spark");
+                spawnFloatingText(hitPoint.x, hitPoint.y - 20, `-${dmg} STUN!`, "#00f0ff");
+
+                screenShake = 9;
+                hitStop = 3;
+
+                Body.applyForce(opponent.body, opponent.body.position, {
+                    x: cosA * 0.035,
+                    y: sinA * 0.02 - 0.02
+                });
+
+                updateHud();
+
+                if (opponent.isDummy && opponent.hp <= 0) {
+                    spawnFloatingText(opponent.body.position.x, opponent.body.position.y - 30, "RESPAWN", "#00e676");
+                    opponent.hp = 100;
+                    updateHud();
+                } else if (opponent.hp <= 0) {
+                    finishGame(p, opponent);
+                }
+            }
+        }
+
+        lightningEffects.push({
+            startX: hand.x,
+            startY: hand.y,
+            endX: hitPoint.x,
+            endY: hitPoint.y,
+            color: p.color,
+            life: 8,
+            segments: generateLightningSegments(hand.x, hand.y, hitPoint.x, hitPoint.y)
+        });
+    }
+
+    // --- PROJECTILE SPAWNERS ---
+    function spawnMagicOrb(p, hand, aimAngle, damage, chargeRatio) {
+        projectiles.push({
+            id: ++projIdCounter,
+            type: "magic",
+            ownerId: p.id,
+            color: p.color,
+            x: hand.x + Math.cos(aimAngle) * 16,
+            y: hand.y + Math.sin(aimAngle) * 16,
+            vx: Math.cos(aimAngle) * 8,
+            vy: Math.sin(aimAngle) * 8,
+            radius: 8 + chargeRatio * 6,
+            damage,
+            distTraveled: 0,
+            maxDist: 650,
+            chargeRatio,
+            hitTargets: new Set()
+        });
+    }
+
+    function spawnArrow(p, hand, aimAngle, damage, speed, chargeRatio) {
+        projectiles.push({
+            id: ++projIdCounter,
+            type: "arrow",
+            ownerId: p.id,
+            color: p.color,
+            x: hand.x + Math.cos(aimAngle) * 20,
+            y: hand.y + Math.sin(aimAngle) * 20,
+            vx: Math.cos(aimAngle) * speed,
+            vy: Math.sin(aimAngle) * speed,
+            gravity: 0.14,
+            length: 26,
+            damage,
+            angle: aimAngle,
+            distTraveled: 0,
+            maxDist: 800,
+            chargeRatio,
+            hitTargets: new Set()
+        });
+    }
+
+    function spawnBoomerang(p, hand, aimAngle) {
+        projectiles.push({
+            id: ++projIdCounter,
+            type: "boomerang",
+            ownerId: p.id,
+            color: p.color,
+            x: hand.x + Math.cos(aimAngle) * 15,
+            y: hand.y + Math.sin(aimAngle) * 15,
+            angle: aimAngle,
+            rotAngle: 0,
+            speed: 8.5,
+            phase: "outbound",
+            phaseTimer: 0,
+            outboundDuration: 32,
+            damage: 10,
+            radius: 12,
+            outboundHits: new Set(),
+            inboundHits: new Set(),
+            dead: false
+        });
+    }
+
+    function spawnRocket(p, hand, aimAngle) {
+        projectiles.push({
+            id: ++projIdCounter,
+            type: "rocket",
+            ownerId: p.id,
+            color: p.color,
+            x: hand.x + Math.cos(aimAngle) * 20,
+            y: hand.y + Math.sin(aimAngle) * 20,
+            vx: Math.cos(aimAngle) * 7,
+            vy: Math.sin(aimAngle) * 7,
+            angle: aimAngle,
+            radius: 8,
+            distTraveled: 0,
+            maxDist: 700,
+            damageDirect: 16,
+            maxBlastDamage: 25,
+            blastRadius: 100,
+            hitTargets: new Set()
+        });
+    }
+
+    function spawnShuriken(p, hand, angle) {
+        projectiles.push({
+            id: ++projIdCounter,
+            type: "shuriken",
+            ownerId: p.id,
+            color: p.color,
+            x: hand.x + Math.cos(angle) * 15,
+            y: hand.y + Math.sin(angle) * 15,
+            vx: Math.cos(angle) * 11,
+            vy: Math.sin(angle) * 11,
+            rotAngle: 0,
+            radius: 8,
+            damage: 5,
+            distTraveled: 0,
+            maxDist: 600,
+            hitTargets: new Set()
+        });
+    }
+
+    // --- EXPLOSION DISPATCHER ---
+    function triggerExplosion(x, y, ownerId, directHitPlayer = null) {
+        sound.playExplosion();
+        screenShake = 13;
+        hitStop = 3;
+
+        explosions.push({
+            x, y,
+            radius: 100,
+            currentRadius: 12,
+            life: 14,
+            maxLife: 14
+        });
+
+        spawnParticles(x, y, 28, "#ff5500", 8, "spark");
+        spawnParticles(x, y, 16, "#ffcc00", 6, "spark");
+        spawnParticles(x, y, 12, "rgba(90, 90, 90, 0.7)", 4, "dust");
+
+        players.forEach(target => {
+            if (!target.alive) return;
+            const targetPos = target.body.position;
+            const d = distance({ x, y }, targetPos);
+
+            if (d <= 100) {
+                const factor = 1 - d / 100;
+                const normX = d > 0 ? (targetPos.x - x) / d : 0;
+                const normY = d > 0 ? (targetPos.y - y) / d : -1;
+
+                // Radial knockback applied to both owner and target!
+                const force = (factor * 0.11 + 0.035);
+                Body.applyForce(target.body, targetPos, {
+                    x: normX * force,
+                    y: Math.min(-0.035, normY * force - 0.03)
+                });
+
+                // Owner DOES NOT take damage from own rocket!
+                if (target.id !== ownerId) {
+                    if (target.invulnerability <= 0) {
+                        const dmg = (target === directHitPlayer) ? 25 : Math.max(8, Math.round(25 * factor));
+                        target.hp = Math.max(0, target.hp - dmg);
+                        target.invulnerability = 16;
+
+                        spawnFloatingText(targetPos.x, targetPos.y - 25, `-${dmg}`, "#ff4400");
+                        updateHud();
+
+                        if (target.isDummy && target.hp <= 0) {
+                            spawnFloatingText(targetPos.x, targetPos.y - 30, "RESPAWN", "#00e676");
+                            target.hp = 100;
+                            updateHud();
+                        } else if (target.hp <= 0) {
+                            const owner = players.find(pl => pl.id === ownerId) || target;
+                            finishGame(owner, target);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- UPDATE PROJECTILES ---
+    function updateProjectiles() {
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const p = projectiles[i];
+            const speed = Math.hypot(p.vx || 0, p.vy || 0) || p.speed || 8;
+            p.distTraveled = (p.distTraveled || 0) + speed;
+
+            // Update Trajectory
+            if (p.type === "arrow") {
+                p.vy += p.gravity;
+                p.angle = Math.atan2(p.vy, p.vx);
+                p.x += p.vx;
+                p.y += p.vy;
+            } else if (p.type === "magic") {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (Math.random() < 0.45) {
+                    spawnParticles(p.x, p.y, 1, p.color, 1.5, "spark");
+                }
+            } else if (p.type === "shuriken") {
+                p.rotAngle += 0.45;
+                p.x += p.vx;
+                p.y += p.vy;
+            } else if (p.type === "rocket") {
+                p.x += p.vx;
+                p.y += p.vy;
+                spawnParticles(
+                    p.x - Math.cos(p.angle) * 14,
+                    p.y - Math.sin(p.angle) * 14,
+                    1,
+                    "rgba(140, 140, 140, 0.6)",
+                    1.5,
+                    "dust"
+                );
+            } else if (p.type === "boomerang") {
+                p.rotAngle += 0.35;
+                if (p.phase === "outbound") {
+                    p.x += Math.cos(p.angle) * p.speed;
+                    p.y += Math.sin(p.angle) * p.speed;
+                    p.phaseTimer++;
+                    if (p.phaseTimer >= p.outboundDuration || p.x <= 15 || p.x >= width - 15 || p.y >= floorY - 5) {
+                        p.phase = "returning";
+                    }
+                } else {
+                    p.phaseTimer++;
+                    const owner = players.find(pl => pl.id === p.ownerId);
+                    if (owner && owner.alive) {
+                        const dx = owner.body.position.x - p.x;
+                        const dy = owner.body.position.y - p.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < 30) {
+                            p.dead = true;
+                            sound.playMenuNav();
+                            spawnParticles(p.x, p.y, 6, p.color, 3, "spark");
+                        } else {
+                            p.x += (dx / dist) * 9.2;
+                            p.y += (dy / dist) * 9.2;
+                        }
+                    } else {
+                        p.dead = true;
+                    }
+                    if (p.phaseTimer > 120) p.dead = true;
+                }
+            }
+
+            // Boundary collision
+            if (p.type !== "boomerang" && (p.y >= floorY || p.x <= 0 || p.x >= width || p.distTraveled >= p.maxDist)) {
+                if (p.type === "rocket") {
+                    triggerExplosion(p.x, Math.min(p.y, floorY), p.ownerId);
+                } else {
+                    spawnParticles(p.x, Math.min(p.y, floorY), 6, p.color, 3, "spark");
+                }
+                p.dead = true;
+                projectiles.splice(i, 1);
+                continue;
+            }
+
+            if (p.dead) {
+                projectiles.splice(i, 1);
+                continue;
+            }
+
+            // Target collision
+            for (const target of players) {
+                if (target.id === p.ownerId || !target.alive || target.invulnerability > 0) continue;
+
+                const targetSkel = getStickmanSkeleton(target);
+                const targetPoints = [
+                    { pt: targetSkel.head, r: 16 },
+                    { pt: { x: (targetSkel.neck.x + targetSkel.pelvis.x) / 2, y: (targetSkel.neck.y + targetSkel.pelvis.y) / 2 }, r: 18 },
+                    { pt: targetSkel.pelvis, r: 16 }
+                ];
+
+                let collided = false;
+                for (const tp of targetPoints) {
+                    if (distance(tp.pt, { x: p.x, y: p.y }) < tp.r + (p.radius || 10)) {
+                        collided = true;
+                        break;
+                    }
+                }
+
+                if (collided) {
+                    if (p.type === "rocket") {
+                        triggerExplosion(p.x, p.y, p.ownerId, target);
+                        p.dead = true;
+                        break;
+                    } else if (p.type === "boomerang") {
+                        const hitSet = (p.phase === "outbound") ? p.outboundHits : p.inboundHits;
+                        if (!hitSet.has(target.id)) {
+                            hitSet.add(target.id);
+                            target.hp = Math.max(0, target.hp - p.damage);
+                            target.invulnerability = 14;
+
+                            sound.playHit();
+                            screenShake = 6;
+                            hitStop = 2;
+
+                            const kbX = Math.sign(p.x - targetSkel.pos.x) * -0.045;
+                            Body.applyForce(target.body, target.body.position, { x: kbX, y: -0.025 });
+
+                            spawnParticles(p.x, p.y, 14, p.color, 6, "spark");
+                            spawnFloatingText(p.x, p.y - 20, `-${p.damage}`, p.color);
+                            updateHud();
+
+                            if (target.isDummy && target.hp <= 0) {
+                                spawnFloatingText(target.body.position.x, target.body.position.y - 30, "RESPAWN", "#00e676");
+                                target.hp = 100;
+                                updateHud();
+                            } else if (target.hp <= 0) {
+                                const owner = players.find(pl => pl.id === p.ownerId) || target;
+                                finishGame(owner, target);
+                            }
+                        }
+                    } else {
+                        // Magic, Arrow, Shuriken
+                        if (!p.hitTargets.has(target.id)) {
+                            p.hitTargets.add(target.id);
+                            target.hp = Math.max(0, target.hp - p.damage);
+                            target.invulnerability = 14;
+
+                            sound.playHit();
+                            screenShake = (p.type === "arrow") ? 7 : 5;
+                            hitStop = 2;
+
+                            const hyp = Math.hypot(p.vx, p.vy) || 1;
+                            const kbForce = (p.type === "arrow") ? 0.065 : ((p.type === "magic") ? 0.05 : 0.035);
+                            Body.applyForce(target.body, target.body.position, {
+                                x: (p.vx / hyp) * kbForce,
+                                y: Math.min(-0.02, (p.vy / hyp) * kbForce - 0.02)
+                            });
+
+                            spawnParticles(p.x, p.y, 14, p.color, 6, "spark");
+                            spawnFloatingText(p.x, p.y - 20, `-${p.damage}`, p.color);
+                            updateHud();
+
+                            if (target.isDummy && target.hp <= 0) {
+                                spawnFloatingText(target.body.position.x, target.body.position.y - 30, "RESPAWN", "#00e676");
+                                target.hp = 100;
+                                updateHud();
+                            } else if (target.hp <= 0) {
+                                const owner = players.find(pl => pl.id === p.ownerId) || target;
+                                finishGame(owner, target);
+                            }
+
+                            p.dead = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (p.dead) {
+                projectiles.splice(i, 1);
+            }
+        }
+    }
+
+    // --- SPECIAL SPIN ATTACK / DASH ---
+    function triggerSpinAttack(p) {
+        if (currentGameState !== "PLAYING" || gameEnded || countdown > 0 || !p.alive || p.stunTimer > 0) return;
+        if (p.spinTimer > 0) return;
+
+        const wep = p.weapon;
+        p.spinDuration = 22;
+        p.spinTimer = p.spinDuration;
+        p.spinSpeed = p.facing * (wep.spinSpeed || (wep.id === "hammer" ? 0.38 : (wep.id === "spear" ? 0.42 : 0.48)));
+
+        p.isAttacking = true;
+        p.attackStartTime = performance.now();
+        p.attackDuration = p.spinDuration * 17;
+        p.attackHitTargets.clear();
+
+        sound.playSpin();
+
+        // Dash meluncur bertenaga ke arah bidikan khas Supreme Duelist!
+        const dashSpeed = wep.id === "spear" ? 14 : (wep.id === "hammer" ? 11.5 : 13);
+        const dashVx = Math.cos(p.aimAngle) * dashSpeed;
+        const dashVy = Math.sin(p.aimAngle) * dashSpeed;
+
+        Body.setVelocity(p.body, {
+            x: p.body.velocity.x * 0.45 + dashVx,
+            y: Math.min(-4, p.body.velocity.y * 0.45 + dashVy)
+        });
+
+        // Flail whip tornado force
+        if (p.flailBall) {
+            const perpX = -Math.sin(p.aimAngle) * p.facing;
+            const perpY = Math.cos(p.aimAngle) * p.facing;
+            Body.setVelocity(p.flailBall, {
+                x: p.body.velocity.x + perpX * 22,
+                y: p.body.velocity.y + perpY * 22
+            });
+        }
+
+        spawnParticles(p.body.position.x, p.body.position.y, 14, p.color, 6, "spark");
+    }
+
+    // --- COMBAT SYSTEM ---
+    function updateCombat(p1, p2) {
+        if (!p1.alive || !p2.alive) return;
+
+        const skel1 = getStickmanSkeleton(p1);
+        const skel2 = getStickmanSkeleton(p2);
+        const s1 = getSword(p1, skel1);
+        const s2 = getSword(p2, skel2);
+
+        // 1. Sword / Melee Clash
+        const isMelee1 = p1.weapon.type.startsWith("melee");
+        const isMelee2 = p2.weapon.type.startsWith("melee");
+
+        if (isMelee1 && isMelee2 && linesIntersect(s1.hand, s1.tip, s2.hand, s2.tip)) {
+            const midX = (s1.tip.x + s2.tip.x) / 2;
+            const midY = (s1.tip.y + s2.tip.y) / 2;
+
+            spawnParticles(midX, midY, 14, "#ffea00", 6, "spark");
+            spawnFloatingText(midX, midY - 14, "CLASH!", "#ffea00");
+            sound.playClash();
+
+            screenShake = 6;
+            hitStop = 2;
+
+            Body.applyForce(p1.body, p1.body.position, {
+                x: -Math.cos(p1.aimAngle) * 0.035,
+                y: -Math.sin(p1.aimAngle) * 0.025
+            });
+            Body.applyForce(p2.body, p2.body.position, {
+                x: -Math.cos(p2.aimAngle) * 0.035,
+                y: -Math.sin(p2.aimAngle) * 0.025
+            });
+            return;
+        }
+
+        // 2. Melee Damage Checks
+        checkMeleeHit(p1, s1, p2, skel2);
+        checkMeleeHit(p2, s2, p1, skel1);
+
+        // 3. Flail Damage Checks
+        checkFlailHit(p1, p2, skel2);
+        checkFlailHit(p2, p1, skel1);
+    }
+
+    function checkMeleeHit(attacker, sword, target, targetSkel) {
+        if (!attacker.weapon.type.startsWith("melee")) return;
+        if (target.invulnerability > 0 || !target.alive) return;
+
+        const isSpinning = attacker.spinTimer > 0;
+        const isAttacking = attacker.isAttacking;
+
+        if (!isSpinning && !isAttacking) return;
+        if (attacker.attackHitTargets.has(target.id)) return;
+
+        const targets = [
+            { pt: targetSkel.head, r: 16, isHead: true },
+            { pt: { x: (targetSkel.neck.x + targetSkel.pelvis.x) / 2, y: (targetSkel.neck.y + targetSkel.pelvis.y) / 2 }, r: 18, isHead: false },
+            { pt: targetSkel.pelvis, r: 16, isHead: false }
+        ];
+
+        for (const t of targets) {
+            let hit = false;
+            if (attacker.weapon.id === "spear") {
+                // Focus hitbox on spearhead tip
+                hit = distance(t.pt, sword.tip) < t.r + 9;
+            } else if (attacker.weapon.id === "hammer") {
+                hit = distance(t.pt, sword.tip) < t.r + 16 || pointSegmentDistance(t.pt, sword.hand, sword.tip) < t.r + 10;
+            } else {
+                // Sword: arc segment hitbox
+                hit = pointSegmentDistance(t.pt, sword.hand, sword.tip) < t.r + 8;
+            }
+
+            if (hit) {
+                attacker.attackHitTargets.add(target.id);
+
+                const baseDmg = t.isHead ? attacker.weapon.damage + 4 : attacker.weapon.damage;
+                const damage = isSpinning ? baseDmg + 6 : baseDmg;
+
+                target.hp = Math.max(0, target.hp - damage);
+                target.invulnerability = 16;
+
+                const hitX = t.pt.x;
+                const hitY = t.pt.y;
+
+                spawnParticles(hitX, hitY, isSpinning ? 22 : 16, attacker.color, 7, "spark");
+                spawnParticles(hitX, hitY, 8, "#ffffff", 5, "spark");
+                spawnFloatingText(hitX, hitY - 20, `-${damage}`, t.isHead ? "#ffea00" : attacker.color);
+
+                sound.playHit();
+                screenShake = (attacker.weapon.id === "hammer" || isSpinning) ? 12 : 7;
+                hitStop = 3;
+
+                // Knockback force
+                const kbDirX = Math.cos(attacker.aimAngle);
+                const kbDirY = Math.sin(attacker.aimAngle);
+                const kbForce = (attacker.weapon.knockback || 0.055) * (isSpinning ? 1.4 : 1.0);
+
+                Body.applyForce(target.body, target.body.position, {
+                    x: kbDirX * kbForce,
+                    y: Math.min(-0.03, kbDirY * kbForce - 0.03)
+                });
+
+                // Great Hammer: unbalances and spins target with torque
+                if (attacker.weapon.id === "hammer") {
+                    target.body.torque += target.facing * 0.42;
+                    // Recoil on attacker
+                    Body.applyForce(attacker.body, attacker.body.position, {
+                        x: -kbDirX * 0.02,
+                        y: 0.01
+                    });
+                }
+
+                updateHud();
+
+                if (target.isDummy && target.hp <= 0) {
+                    spawnFloatingText(target.body.position.x, target.body.position.y - 30, "RESPAWN", "#00e676");
+                    target.hp = 100;
+                    updateHud();
+                } else if (target.hp <= 0) {
+                    finishGame(attacker, target);
+                }
+                break;
+            }
+        }
+    }
+
+    function checkFlailHit(attacker, target, targetSkel) {
+        if (attacker.weapon.id !== "flail" || !attacker.flailBall) return;
+        if (target.invulnerability > 0 || !target.alive) return;
+
+        const ball = attacker.flailBall;
+        const vx = ball.velocity.x;
+        const vy = ball.velocity.y;
+        const speed = Math.hypot(vx, vy);
+
+        if (speed < 1.0) {
+            attacker.attackHitTargets.clear();
+            return;
+        }
+
+        if (speed < 2.0) return;
+        if (attacker.attackHitTargets.has(target.id)) return;
+
+        const targets = [
+            { pt: targetSkel.head, r: 16, isHead: true },
+            { pt: { x: (targetSkel.neck.x + targetSkel.pelvis.x) / 2, y: (targetSkel.neck.y + targetSkel.pelvis.y) / 2 }, r: 18, isHead: false },
+            { pt: targetSkel.pelvis, r: 16, isHead: false }
+        ];
+
+        for (const t of targets) {
+            if (distance(ball.position, t.pt) < t.r + 13) {
+                attacker.attackHitTargets.add(target.id);
+
+                const damage = t.isHead ? attacker.weapon.damage + 4 : attacker.weapon.damage; // 16 or 20
+                target.hp = Math.max(0, target.hp - damage);
+                target.invulnerability = 16;
+
+                sound.playHit();
+                screenShake = 9;
+                hitStop = 3;
+
+                const kbDirX = vx / speed;
+                const kbDirY = vy / speed;
+                const kbForce = Math.min(0.11, speed * 0.013 + 0.035);
+
+                Body.applyForce(target.body, target.body.position, {
+                    x: kbDirX * kbForce,
+                    y: Math.min(-0.03, kbDirY * kbForce - 0.02)
+                });
+
+                spawnParticles(ball.position.x, ball.position.y, 18, attacker.color, 7, "spark");
+                spawnFloatingText(ball.position.x, ball.position.y - 20, `-${damage}`, attacker.color);
+                updateHud();
+
+                if (target.isDummy && target.hp <= 0) {
+                    spawnFloatingText(target.body.position.x, target.body.position.y - 30, "RESPAWN", "#00e676");
+                    target.hp = 100;
+                    updateHud();
+                } else if (target.hp <= 0) {
+                    finishGame(attacker, target);
+                }
+                break;
+            }
+        }
+    }
+
+    function checkGroundBounce(p, skel) {
+        if (p.body.velocity.y > 2.0) {
+            const sword = getSword(p, skel);
+            if (sword.tip.y >= floorY && Math.sin(p.aimAngle) > 0.4) {
+                const bouncePower = (p.weapon.id === "staff" || p.weapon.id === "spear") ? -17.0 : -15.0;
+                Body.setVelocity(p.body, {
+                    x: p.body.velocity.x * 0.9,
+                    y: bouncePower
+                });
+                spawnParticles(sword.tip.x, floorY - 2, 7, "#ffea00", 4, "spark");
+                sound.playBounce();
+            }
+        }
+    }
+
+    function finishGame(winner, loser) {
+        gameEnded = true;
+        loser.alive = false;
+
+        sound.playWin();
+        spawnParticles(loser.body.position.x, loser.body.position.y, 35, loser.color, 10, "spark");
+
+        announcement.innerHTML =
+            `<h1 style="color:${winner.color}">PLAYER ${winner.id} MENANG!</h1>
+             <p>Tekan <span class="key-tag" style="font-size:13px;padding:3px 10px;color:#fff;border-color:#5a739c;">SPASI</span> untuk tanding lagi</p>`;
+        announcement.style.display = "block";
+        announcement.style.opacity = "1";
+    }
+
+    // --- UPDATE PLAYER LOGIC ---
+    function updatePlayer(p) {
+        if (p.invulnerability > 0) p.invulnerability--;
+        if (p.jumpCooldown > 0) p.jumpCooldown--;
+        if (p.stunTimer > 0) p.stunTimer--;
+
+        const now = performance.now();
+        if (p.isAttacking && now >= p.attackStartTime + p.attackDuration) {
+            p.isAttacking = false;
+        }
+
+        // Charging logic for staff & bow
+        if (p.isCharging) {
+            p.chargeProgress = now - p.chargeStartTime;
+            const maxCharge = p.weapon.activeDuration || 1000;
+            const skel = getStickmanSkeleton(p);
+            const sword = getSword(p, skel);
+
+            if (Math.random() < 0.4) {
+                spawnParticles(sword.tip.x, sword.tip.y, 2, p.color, 2.5, "spark");
+            }
+            if (p.chargeProgress >= maxCharge && Math.random() < 0.1) {
+                sound.playChargeHum();
+            }
+        }
+
+        const body = p.body;
+        const currentY = body.position.y;
+        const distFromFloor = floorY - currentY;
+
+        // Batas langit-langit (tidak bisa terbang melebihi bar menu HP di atas)
+        if (body.position.y < ceilingY + 34) {
+            Body.setPosition(body, { x: body.position.x, y: ceilingY + 34 });
+            if (body.velocity.y < 0) {
+                Body.setVelocity(body, { x: body.velocity.x, y: Math.abs(body.velocity.y) * 0.25 });
+            }
+        }
+
+        p.grounded = distFromFloor <= 65 && Math.abs(body.velocity.y) < 5.0;
+        if (p.grounded) {
+            p.coyoteTimer = 8;
+        } else if (p.coyoteTimer > 0) {
+            p.coyoteTimer--;
+        }
+
+        if (!p.alive) return;
+
+        // Update Flail Constraint Anchor
+        const skel = getStickmanSkeleton(p);
+        const sword = getSword(p, skel);
+
+        if (p.flailConstraint) {
+            p.flailConstraint.pointA = { x: sword.hand.x, y: sword.hand.y };
+        }
+
+        // Dummy AI behavior in Training Mode
+        if (p.isDummy) {
+            p.targetAimAngle = p.facing === 1 ? 0.3 : Math.PI - 0.3;
+            p.aimAngle = angleLerp(p.aimAngle, p.targetAimAngle, 0.1);
+            return;
+        }
+
+        // If player is STUNNED: cannot move or attack, but world physics still applies
+        if (p.stunTimer > 0) {
+            p.isMoving = false;
+            p.isCharging = false;
+            return;
+        }
+
+        // Read 360 Inputs
+        let inputX = 0;
+        let inputY = 0;
+
+        if (keys[p.controls.left]) inputX -= 1;
+        if (keys[p.controls.right]) inputX += 1;
+        if (keys[p.controls.up]) inputY -= 1;
+        if (keys[p.controls.down]) inputY += 1;
+
+        p.isMoving = inputX !== 0 || inputY !== 0;
+
+        if (inputX !== 0) {
+            p.facing = Math.sign(inputX);
+        }
+
+        // 360 Aim Direction
+        if (p.spinTimer > 0) {
+            p.aimAngle += p.spinSpeed;
+            p.spinTimer--;
+        } else if (p.isMoving) {
+            p.targetAimAngle = Math.atan2(inputY, inputX);
+            p.aimAngle = angleLerp(p.aimAngle, p.targetAimAngle, 0.28);
+        } else {
+            const idleTarget = p.facing === 1 ? 0.25 : Math.PI - 0.25;
+            p.targetAimAngle = idleTarget;
+            p.aimAngle = angleLerp(p.aimAngle, p.targetAimAngle, 0.15);
+        }
+
+        // Movement
+        const moveSpeed = 5.8;
+        if (inputX !== 0) {
+            const targetVx = inputX * moveSpeed;
+            const accel = p.grounded ? 0.38 : 0.22;
+            const newVx = body.velocity.x + (targetVx - body.velocity.x) * accel;
+            Body.setVelocity(body, { x: newVx, y: body.velocity.y });
+        } else if (p.grounded) {
+            Body.setVelocity(body, { x: body.velocity.x * 0.82, y: body.velocity.y });
+        }
+
+        // Jump & Aerial Thrust
+        if (keys[p.controls.up]) {
+            if (p.coyoteTimer > 0 && p.jumpCooldown === 0) {
+                Body.setVelocity(body, { x: body.velocity.x * 1.05, y: -16.5 });
+                p.coyoteTimer = 0;
+                p.jumpCooldown = 12;
+                p.grounded = false;
+                spawnParticles(body.position.x, floorY - 2, 8, "rgba(220, 235, 255, 0.75)", 4, "dust");
+                sound.playJump();
+            } else if (!p.grounded && body.velocity.y > -5) {
+                Body.applyForce(body, body.position, { x: 0, y: -0.0035 });
+            }
+        }
+
+        if (keys[p.controls.down] && !p.grounded) {
+            Body.applyForce(body, body.position, { x: 0, y: 0.006 });
+        }
+
+        if (p.grounded && Math.abs(body.velocity.x) > 2.5 && Math.random() < 0.28) {
+            spawnParticles(body.position.x - p.facing * 10, floorY - 2, 1, "rgba(180, 205, 240, 0.4)", 1.5, "dust");
+        }
+
+        // Upright Balance
+        let targetAngle = 0;
+        if (Math.abs(body.velocity.x) > 0.8) targetAngle = Math.sign(body.velocity.x) * 0.18;
+        if (p.spinTimer > 0) targetAngle = p.facing * 0.35;
+
+        let angleDiff = Math.atan2(Math.sin(targetAngle - body.angle), Math.cos(targetAngle - body.angle));
+        body.torque += angleDiff * 0.12 - body.angularVelocity * 0.024;
+        body.angularVelocity *= 0.86;
+
+        // Suspension Spring
+        const desiredStandY = floorY - 58;
+        if (distFromFloor > 10 && distFromFloor < 85) {
+            const dy = desiredStandY - currentY;
+            const springForce = dy * 0.0042;
+            const dampingForce = -body.velocity.y * 0.0032;
+            const totalLift = Math.max(-0.016, Math.min(0.018, springForce + dampingForce));
+            Body.applyForce(body, body.position, { x: 0, y: totalLift });
+        }
+
+        if (p.grounded && Math.abs(body.velocity.x) > 0.5) {
+            p.walkCycle += Math.abs(body.velocity.x) * 0.06;
+        } else if (p.grounded) {
+            p.walkCycle *= 0.82;
+        }
+
+        checkGroundBounce(p, skel);
+
+        // Scarf simulation
+        let prevX = skel.head.x - p.facing * 8;
+        let prevY = skel.head.y;
+        for (let i = 0; i < p.scarfJoints.length; i++) {
+            const joint = p.scarfJoints[i];
+            const targetX = prevX - p.facing * (9 + i * 2) - body.velocity.x * 1.5;
+            const targetY = prevY + Math.sin(Date.now() * 0.008 + i) * 2 - body.velocity.y * 0.5;
+            joint.x += (targetX - joint.x) * 0.38;
+            joint.y += (targetY - joint.y) * 0.38;
+            prevX = joint.x;
+            prevY = joint.y;
+        }
+
+        // Weapon Slash Trail
+        const speedSq = body.velocity.x * body.velocity.x + body.velocity.y * body.velocity.y;
+        if (p.spinTimer > 0 || p.isAttacking || speedSq > 20 || Math.abs(p.aimAngle - p.targetAimAngle) > 0.25) {
+            p.slashTrail.push({ tip: sword.tip, hand: sword.hand, alpha: 1 });
+        }
+        for (let i = p.slashTrail.length - 1; i >= 0; i--) {
+            p.slashTrail[i].alpha -= 0.12;
+            if (p.slashTrail[i].alpha <= 0) p.slashTrail.splice(i, 1);
+        }
+    }
+
+    // --- PARTICLES & FLOATING TEXTS ---
+    function spawnParticles(x, y, count, color, speed = 5, type = "spark") {
+        if (graphicQuality === "low") count = Math.ceil(count * 0.4);
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = (Math.random() * 0.7 + 0.3) * speed;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * velocity,
+                vy: Math.sin(angle) * velocity - (type === "dust" ? 1 : 0),
+                size: type === "dust" ? Math.random() * 5 + 3 : Math.random() * 3 + 2,
+                color, life: 1, decay: Math.random() * 0.04 + 0.03, type
+            });
+        }
+    }
+
+    function spawnFloatingText(x, y, text, color) {
+        floatingTexts.push({ x, y, text, color, life: 1, vy: -1.8 });
+    }
+
+    function drawLimb(p1, p2, width, color) {
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = "round";
+        ctx.stroke();
+    }
+
+    // --- DRAW 10 WEAPONS (DISTINCTIVE VISUALS) ---
+    function drawWeapon(hand, tip, angle, weapon, playerColor, isAttacking = false, p = null) {
+        ctx.save();
+
+        if (graphicQuality !== "low") {
+            ctx.shadowColor = playerColor;
+            ctx.shadowBlur = isAttacking ? 18 : 6;
+        }
+
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+        const perpX = -sinA;
+        const perpY = cosA;
+
+        switch (weapon.id) {
+            case "spear": {
+                // Long wooden shaft
+                ctx.strokeStyle = "#8b6540";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(hand.x - cosA * 12, hand.y - sinA * 12);
+                ctx.lineTo(tip.x - cosA * 18, tip.y - sinA * 18);
+                ctx.stroke();
+
+                // Golden bindings
+                ctx.strokeStyle = "#d4af37";
+                ctx.lineWidth = 4.5;
+                ctx.beginPath();
+                ctx.moveTo(tip.x - cosA * 24, tip.y - sinA * 24);
+                ctx.lineTo(tip.x - cosA * 18, tip.y - sinA * 18);
+                ctx.stroke();
+
+                // Gleaming spearhead
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.moveTo(tip.x, tip.y);
+                ctx.lineTo(tip.x - cosA * 20 + perpX * 7.5, tip.y - sinA * 20 + perpY * 7.5);
+                ctx.lineTo(tip.x - cosA * 15, tip.y - sinA * 15);
+                ctx.lineTo(tip.x - cosA * 20 - perpX * 7.5, tip.y - sinA * 20 - perpY * 7.5);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+
+            case "hammer": {
+                // Heavy haft
+                ctx.strokeStyle = "#4e596d";
+                ctx.lineWidth = 4.5;
+                ctx.beginPath();
+                ctx.moveTo(hand.x - cosA * 10, hand.y - sinA * 10);
+                ctx.lineTo(tip.x - cosA * 8, tip.y - sinA * 8);
+                ctx.stroke();
+
+                // Giant warhammer steel block head
+                const hx = tip.x - cosA * 8;
+                const hy = tip.y - sinA * 8;
+                ctx.fillStyle = "#8ea1bc";
+                ctx.beginPath();
+                ctx.moveTo(hx + perpX * 14 - cosA * 8, hy + perpY * 14 - sinA * 8);
+                ctx.lineTo(hx + perpX * 14 + cosA * 8, hy + perpY * 14 + sinA * 8);
+                ctx.lineTo(hx - perpX * 14 + cosA * 8, hy - perpY * 14 + sinA * 8);
+                ctx.lineTo(hx - perpX * 14 - cosA * 8, hy - perpY * 14 - sinA * 8);
+                ctx.closePath();
+                ctx.fill();
+
+                // Steel border / rivets
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                break;
+            }
+
+            case "staff": {
+                // Mystic wooden staff
+                ctx.strokeStyle = "#7a5230";
+                ctx.lineWidth = 4.5;
+                ctx.beginPath();
+                ctx.moveTo(hand.x - cosA * 18, hand.y - sinA * 18);
+                ctx.lineTo(tip.x - cosA * 8, tip.y - sinA * 8);
+                ctx.stroke();
+
+                // Golden prongs
+                ctx.strokeStyle = "#ffd700";
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+                ctx.moveTo(tip.x - cosA * 10 + perpX * 6, tip.y - sinA * 10 + perpY * 6);
+                ctx.lineTo(tip.x + perpX * 4, tip.y + perpY * 4);
+                ctx.lineTo(tip.x - perpX * 4, tip.y - perpY * 4);
+                ctx.lineTo(tip.x - cosA * 10 - perpX * 6, tip.y - sinA * 10 - perpY * 6);
+                ctx.stroke();
+
+                // Glowing magic crystal orb
+                const chargeScale = (p && p.isCharging) ? (1 + Math.min(1, p.chargeProgress / 700) * 0.6) : 1;
+                ctx.fillStyle = playerColor;
+                ctx.beginPath();
+                ctx.arc(tip.x, tip.y, 7 * chargeScale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.arc(tip.x, tip.y, 3 * chargeScale, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case "bow": {
+                // Recurve bow limbs
+                const bowMidX = hand.x + cosA * 10;
+                const bowMidY = hand.y + sinA * 10;
+                const limb1X = bowMidX + perpX * 22 - cosA * 4;
+                const limb1Y = bowMidY + perpY * 22 - sinA * 4;
+                const limb2X = bowMidX - perpX * 22 - cosA * 4;
+                const limb2Y = bowMidY - perpY * 22 - sinA * 4;
+
+                ctx.strokeStyle = "#8B4513";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(limb1X, limb1Y);
+                ctx.quadraticCurveTo(bowMidX + cosA * 8, bowMidY + sinA * 8, limb2X, limb2Y);
+                ctx.stroke();
+
+                // Bowstring
+                let pullBack = 0;
+                if (p && p.isCharging) {
+                    pullBack = Math.min(1, p.chargeProgress / 1000) * 14;
+                }
+                const nockX = bowMidX - cosA * (6 + pullBack);
+                const nockY = bowMidY - sinA * (6 + pullBack);
+
+                ctx.strokeStyle = "#f0f4fc";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(limb1X, limb1Y);
+                ctx.lineTo(nockX, nockY);
+                ctx.lineTo(limb2X, limb2Y);
+                ctx.stroke();
+
+                // Arrow nocked
+                ctx.strokeStyle = "#dce6f2";
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(nockX, nockY);
+                ctx.lineTo(tip.x, tip.y);
+                ctx.stroke();
+
+                // Arrow tip
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.moveTo(tip.x, tip.y);
+                ctx.lineTo(tip.x - cosA * 8 + perpX * 3.5, tip.y - sinA * 8 + perpY * 3.5);
+                ctx.lineTo(tip.x - cosA * 8 - perpX * 3.5, tip.y - sinA * 8 - perpY * 3.5);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+
+            case "boomerang": {
+                // Classic aerodynamic wooden boomerang
+                ctx.strokeStyle = "#ba7d48";
+                ctx.lineWidth = 5;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(hand.x - perpX * 14 + cosA * 6, hand.y - perpY * 14 + sinA * 6);
+                ctx.lineTo(hand.x + cosA * 10, hand.y + sinA * 10);
+                ctx.lineTo(hand.x + perpX * 14 + cosA * 6, hand.y + perpY * 14 + sinA * 6);
+                ctx.stroke();
+
+                // Painted bands
+                ctx.strokeStyle = playerColor;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(hand.x + cosA * 5, hand.y + sinA * 5);
+                ctx.lineTo(hand.x + cosA * 12, hand.y + sinA * 12);
+                ctx.stroke();
+                break;
+            }
+
+            case "lightning": {
+                // Golden lightning wand
+                ctx.strokeStyle = "#d4af37";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(hand.x - cosA * 8, hand.y - sinA * 8);
+                ctx.lineTo(tip.x, tip.y);
+                ctx.stroke();
+
+                // Forked prongs
+                ctx.strokeStyle = "#00f0ff";
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(tip.x, tip.y);
+                ctx.lineTo(tip.x + cosA * 6 + perpX * 5, tip.y + sinA * 6 + perpY * 5);
+                ctx.moveTo(tip.x, tip.y);
+                ctx.lineTo(tip.x + cosA * 6 - perpX * 5, tip.y + sinA * 6 - perpY * 5);
+                ctx.stroke();
+
+                // Tip plasma spark
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.arc(tip.x, tip.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case "rocket": {
+                // Rocket launcher tube
+                const rStart = { x: hand.x - cosA * 14, y: hand.y - sinA * 14 };
+                const rEnd = { x: tip.x, y: tip.y };
+
+                ctx.strokeStyle = "#3e4f3a";
+                ctx.lineWidth = 8;
+                ctx.lineCap = "butt";
+                ctx.beginPath();
+                ctx.moveTo(rStart.x, rStart.y);
+                ctx.lineTo(rEnd.x, rEnd.y);
+                ctx.stroke();
+
+                // Sight & muzzle ring
+                ctx.strokeStyle = "#253023";
+                ctx.lineWidth = 10;
+                ctx.beginPath();
+                ctx.moveTo(rEnd.x - cosA * 3, rEnd.y - sinA * 3);
+                ctx.lineTo(rEnd.x, rEnd.y);
+                ctx.stroke();
+
+                // Visible rocket warhead tip
+                ctx.fillStyle = "#ff3344";
+                ctx.beginPath();
+                ctx.moveTo(rEnd.x + cosA * 6, rEnd.y + sinA * 6);
+                ctx.lineTo(rEnd.x + perpX * 3.5, rEnd.y + perpY * 3.5);
+                ctx.lineTo(rEnd.x - perpX * 3.5, rEnd.y - perpY * 3.5);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+
+            case "shuriken": {
+                // Held shuriken ready to throw
+                const sx = hand.x + cosA * 8;
+                const sy = hand.y + sinA * 8;
+
+                ctx.fillStyle = "#e0e6ed";
+                ctx.beginPath();
+                ctx.moveTo(sx, sy - 9);
+                ctx.lineTo(sx + 3, sy - 3);
+                ctx.lineTo(sx + 9, sy);
+                ctx.lineTo(sx + 3, sy + 3);
+                ctx.lineTo(sx, sy + 9);
+                ctx.lineTo(sx - 3, sy + 3);
+                ctx.lineTo(sx - 9, sy);
+                ctx.lineTo(sx - 3, sy - 3);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = "#111622";
+                ctx.beginPath();
+                ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case "flail": {
+                // Handle in hand
+                ctx.strokeStyle = "#5a4128";
+                ctx.lineWidth = 4.5;
+                ctx.beginPath();
+                ctx.moveTo(hand.x - cosA * 8, hand.y - sinA * 8);
+                ctx.lineTo(hand.x + cosA * 10, hand.y + sinA * 10);
+                ctx.stroke();
+
+                const handleTip = { x: hand.x + cosA * 10, y: hand.y + sinA * 10 };
+
+                if (p && p.flailBall) {
+                    // Real-time Matter.js Flail Physics Rendering
+                    const ballPos = p.flailBall.position;
+                    const bAngle = p.flailBall.angle;
+
+                    // Draw chain links
+                    const chainSegments = 5;
+                    ctx.strokeStyle = "#8d9ba8";
+                    ctx.lineWidth = 3;
+                    for (let i = 0; i < chainSegments; i++) {
+                        const t1 = i / chainSegments;
+                        const t2 = (i + 1) / chainSegments;
+                        const lx1 = handleTip.x + (ballPos.x - handleTip.x) * t1;
+                        const ly1 = handleTip.y + (ballPos.y - handleTip.y) * t1;
+                        const lx2 = handleTip.x + (ballPos.x - handleTip.x) * t2;
+                        const ly2 = handleTip.y + (ballPos.y - handleTip.y) * t2;
+                        ctx.beginPath();
+                        ctx.moveTo(lx1, ly1);
+                        ctx.lineTo(lx2, ly2);
+                        ctx.stroke();
+                    }
+
+                    // Spiked ball
+                    ctx.save();
+                    ctx.translate(ballPos.x, ballPos.y);
+                    ctx.rotate(bAngle);
+
+                    // 8 Spikes
+                    ctx.fillStyle = "#ffffff";
+                    for (let s = 0; s < 8; s++) {
+                        const sAngle = (s * Math.PI) / 4;
+                        const sx1 = Math.cos(sAngle) * 16;
+                        const sy1 = Math.sin(sAngle) * 16;
+                        const sx2 = Math.cos(sAngle + 0.3) * 10;
+                        const sy2 = Math.sin(sAngle + 0.3) * 10;
+                        const sx3 = Math.cos(sAngle - 0.3) * 10;
+                        const sy3 = Math.sin(sAngle - 0.3) * 10;
+                        ctx.beginPath();
+                        ctx.moveTo(sx1, sy1);
+                        ctx.lineTo(sx2, sy2);
+                        ctx.lineTo(sx3, sy3);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+
+                    // Iron sphere core
+                    ctx.fillStyle = "#333d4d";
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 11, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = "#66778f";
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.restore();
+                } else {
+                    // Preview representation (static dangling chain & ball)
+                    const ballX = handleTip.x + cosA * 24 + perpX * 12;
+                    const ballY = handleTip.y + sinA * 24 + perpY * 12 + 16;
+
+                    ctx.strokeStyle = "#8d9ba8";
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(handleTip.x, handleTip.y);
+                    ctx.lineTo(ballX, ballY);
+                    ctx.stroke();
+
+                    ctx.fillStyle = "#333d4d";
+                    ctx.beginPath();
+                    ctx.arc(ballX, ballY, 11, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = "#ffffff";
+                    for (let s = 0; s < 8; s++) {
+                        const sAngle = (s * Math.PI) / 4;
+                        ctx.beginPath();
+                        ctx.arc(ballX + Math.cos(sAngle) * 12, ballY + Math.sin(sAngle) * 12, 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                break;
+            }
+
+            case "sword":
+            default: {
+                // Silver double-edged blade
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(hand.x, hand.y);
+                ctx.lineTo(tip.x, tip.y);
+                ctx.stroke();
+
+                // Crossguard
+                ctx.strokeStyle = "#a0b5d0";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(hand.x - perpX * 7, hand.y - perpY * 7);
+                ctx.lineTo(hand.x + perpX * 7, hand.y + perpY * 7);
+                ctx.stroke();
+
+                // Hilt
+                ctx.strokeStyle = "#4d5b73";
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+                ctx.moveTo(hand.x, hand.y);
+                ctx.lineTo(hand.x - cosA * 8, hand.y - sinA * 8);
+                ctx.stroke();
+                break;
+            }
+        }
+
+        ctx.restore();
+    }
+
+    // --- DRAW PROJECTILES & VISUAL EFFECTS ---
+    function drawProjectiles() {
+        projectiles.forEach(p => {
+            ctx.save();
+            if (p.type === "magic") {
+                const grad = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, p.radius);
+                grad.addColorStop(0, "#ffffff");
+                grad.addColorStop(0.4, p.color);
+                grad.addColorStop(1, "rgba(0,0,0,0)");
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (p.type === "arrow") {
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                // Shaft
+                ctx.strokeStyle = "#c8d6e5";
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(-p.length / 2, 0);
+                ctx.lineTo(p.length / 2, 0);
+                ctx.stroke();
+                // Broadhead
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.moveTo(p.length / 2, 0);
+                ctx.lineTo(p.length / 2 - 7, -3.5);
+                ctx.lineTo(p.length / 2 - 7, 3.5);
+                ctx.closePath();
+                ctx.fill();
+                // Fletchings
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.moveTo(-p.length / 2, 0);
+                ctx.lineTo(-p.length / 2 + 5, -3);
+                ctx.lineTo(-p.length / 2 + 8, 0);
+                ctx.lineTo(-p.length / 2 + 5, 3);
+                ctx.closePath();
+                ctx.fill();
+            } else if (p.type === "boomerang") {
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotAngle);
+                ctx.strokeStyle = "#ba7d48";
+                ctx.lineWidth = 4.5;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(-11, -8);
+                ctx.lineTo(0, 4);
+                ctx.lineTo(11, -8);
+                ctx.stroke();
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+            } else if (p.type === "rocket") {
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                // Missile Body
+                ctx.fillStyle = "#4a5d44";
+                ctx.fillRect(-12, -4, 20, 8);
+                // Warhead Cone
+                ctx.fillStyle = "#ff3344";
+                ctx.beginPath();
+                ctx.moveTo(8, -4);
+                ctx.lineTo(15, 0);
+                ctx.lineTo(8, 4);
+                ctx.closePath();
+                ctx.fill();
+                // Fins
+                ctx.fillStyle = "#2c3b28";
+                ctx.beginPath();
+                ctx.moveTo(-12, -7);
+                ctx.lineTo(-7, -4);
+                ctx.lineTo(-12, -4);
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(-12, 7);
+                ctx.lineTo(-7, 4);
+                ctx.lineTo(-12, 4);
+                ctx.closePath();
+                ctx.fill();
+            } else if (p.type === "shuriken") {
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotAngle);
+                ctx.fillStyle = "#e0e6ed";
+                ctx.beginPath();
+                ctx.moveTo(0, -9);
+                ctx.lineTo(3, -3);
+                ctx.lineTo(9, 0);
+                ctx.lineTo(3, 3);
+                ctx.lineTo(0, 9);
+                ctx.lineTo(-3, 3);
+                ctx.lineTo(-9, 0);
+                ctx.lineTo(-3, -3);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = "#0c1017";
+                ctx.beginPath();
+                ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        });
+    }
+
+    function drawVisualEffects() {
+        // 1. Lightning Bolts
+        for (let i = lightningEffects.length - 1; i >= 0; i--) {
+            const eff = lightningEffects[i];
+            const alpha = eff.life / 8;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = eff.color;
+            ctx.lineWidth = 4;
+            ctx.shadowColor = eff.color;
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.moveTo(eff.segments[0].x, eff.segments[0].y);
+            for (let s = 1; s < eff.segments.length; s++) {
+                ctx.lineTo(eff.segments[s].x, eff.segments[s].y);
+            }
+            ctx.stroke();
+
+            // Inner white core
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+
+            eff.life--;
+            if (eff.life <= 0) lightningEffects.splice(i, 1);
+        }
+
+        // 2. Explosions
+        for (let i = explosions.length - 1; i >= 0; i--) {
+            const exp = explosions[i];
+            const prog = 1 - (exp.life / exp.maxLife);
+            const r = exp.radius * prog;
+            const alpha = Math.max(0, 1 - prog);
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            const grad = ctx.createRadialGradient(exp.x, exp.y, 4, exp.x, exp.y, r);
+            grad.addColorStop(0, "#ffffff");
+            grad.addColorStop(0.3, "#ffcc00");
+            grad.addColorStop(0.7, "#ff3300");
+            grad.addColorStop(1, "rgba(40, 20, 20, 0)");
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(exp.x, exp.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            exp.life--;
+            if (exp.life <= 0) explosions.splice(i, 1);
+        }
+    }
+
+    function drawStickman(p) {
+        const skel = getStickmanSkeleton(p);
+        const sword = getSword(p, skel);
+
+        ctx.save();
+
+        if (p.invulnerability > 0 && Math.floor(p.invulnerability / 2) % 2 === 0) {
+            ctx.globalAlpha = 0.35;
+        }
+
+        // Scarf / Headband
+        if (p.scarfJoints.length > 0) {
+            ctx.beginPath();
+            ctx.moveTo(skel.head.x - p.facing * 4, skel.head.y);
+            for (let i = 0; i < p.scarfJoints.length; i++) {
+                ctx.lineTo(p.scarfJoints[i].x, p.scarfJoints[i].y);
+            }
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = "round";
+            ctx.stroke();
+        }
+
+        // Stun Stars Feedback
+        if (p.stunTimer > 0) {
+            const t = Date.now() * 0.01;
+            for (let s = 0; s < 3; s++) {
+                const sAngle = t + s * (Math.PI * 2 / 3);
+                const starX = skel.head.x + Math.cos(sAngle) * 14;
+                const starY = skel.head.y - 18 + Math.sin(sAngle) * 5;
+                ctx.fillStyle = "#ffea00";
+                ctx.beginPath();
+                ctx.arc(starX, starY, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        const legLen1 = 17;
+        const legLen2 = 17;
+        let targetFootBack, targetFootFront;
+
+        if (p.grounded) {
+            const strideBack = -Math.sin(p.walkCycle) * 16 * p.facing;
+            const strideFront = Math.sin(p.walkCycle) * 16 * p.facing;
+            const liftBack = Math.max(0, -Math.cos(p.walkCycle)) * 12;
+            const liftFront = Math.max(0, Math.cos(p.walkCycle)) * 12;
+            targetFootBack = { x: skel.hipBack.x + strideBack, y: floorY - 3 - liftBack };
+            targetFootFront = { x: skel.hipFront.x + strideFront, y: floorY - 3 - liftFront };
+        } else {
+            const jumpProgress = Math.max(-1, Math.min(1, p.body.velocity.y * 0.08));
+            targetFootBack = { x: skel.hipBack.x - p.facing * 10, y: skel.hipBack.y + 22 + jumpProgress * 6 };
+            targetFootFront = { x: skel.hipFront.x + p.facing * 8, y: skel.hipFront.y + 20 - jumpProgress * 6 };
+        }
+
+        const kneeBack = solveIK(skel.hipBack, targetFootBack, legLen1, legLen2, p.facing);
+        const kneeFront = solveIK(skel.hipFront, targetFootFront, legLen1, legLen2, p.facing);
+
+        // Kaki Belakang
+        drawLimb(skel.hipBack, kneeBack, 7, p.color);
+        drawLimb(kneeBack, targetFootBack, 6, p.color);
+
+        // Tangan Belakang
+        const armLen1 = 15;
+        const armLen2 = 14;
+        const backHandTarget = {
+            x: sword.hand.x - Math.cos(p.aimAngle) * 6,
+            y: sword.hand.y - Math.sin(p.aimAngle) * 6
+        };
+        const backElbow = solveIK(skel.backShoulder, backHandTarget, armLen1, armLen2, -p.facing);
+        drawLimb(skel.backShoulder, backElbow, 6.5, p.color);
+        drawLimb(backElbow, backHandTarget, 5.5, p.color);
+
+        // Torso
+        drawLimb(skel.neck, skel.pelvis, 11, p.color);
+
+        // Kaki Depan
+        drawLimb(skel.hipFront, kneeFront, 8, p.color);
+        drawLimb(kneeFront, targetFootFront, 7, p.color);
+
+        // Kepala
+        ctx.beginPath();
+        ctx.arc(skel.head.x, skel.head.y, 13, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+
+        // Mata
+        const eyeAngle = p.aimAngle;
+        const eyeX = skel.head.x + Math.cos(eyeAngle) * 5;
+        const eyeY = skel.head.y + Math.sin(eyeAngle) * 4;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lengan Depan
+        const frontElbow = solveIK(skel.shoulder, sword.hand, armLen1, armLen2, -p.facing);
+        drawLimb(skel.shoulder, frontElbow, 7.5, p.color);
+        drawLimb(frontElbow, sword.hand, 6.5, p.color);
+
+        ctx.restore();
+    }
+
+    function drawSwordTrailAndWeapon(p) {
+        const skel = getStickmanSkeleton(p);
+        const sword = getSword(p, skel);
+
+        // Slash Trail
+        if (p.slashTrail.length > 1) {
+            ctx.save();
+            for (let i = 1; i < p.slashTrail.length; i++) {
+                const prev = p.slashTrail[i - 1];
+                const curr = p.slashTrail[i];
+                ctx.beginPath();
+                ctx.moveTo(prev.tip.x, prev.tip.y);
+                ctx.lineTo(curr.tip.x, curr.tip.y);
+                ctx.lineTo(curr.hand.x, curr.hand.y);
+                ctx.lineTo(prev.hand.x, prev.hand.y);
+                ctx.closePath();
+                ctx.fillStyle = `${p.color}66`;
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        drawWeapon(sword.hand, sword.tip, sword.angle, p.weapon, p.color, p.isAttacking || p.spinTimer > 0, p);
+    }
+
+    function drawGroundShadow(p) {
+        if (!p.alive) return;
+        const x = p.body.position.x;
+        const dist = Math.max(0, floorY - p.body.position.y);
+        const radiusX = Math.max(10, 24 - dist * 0.10);
+        const radiusY = Math.max(3, 7 - dist * 0.035);
+        const alpha = Math.max(0.1, 0.45 - dist * 0.003);
+
+        ctx.save();
+        ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(x, floorY + 2, radiusX, radiusY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // --- BACKGROUND IMAGES ---
+    const bgIngameImg = new Image();
+    bgIngameImg.src = "bg baru.png";
+
+    const bgMenuImg = new Image();
+    bgMenuImg.src = "bg menu.png";
+
+    function drawCoverImage(img) {
+        if (!img.complete || img.naturalWidth === 0) return false;
+        const imgW = img.naturalWidth;
+        const imgH = img.naturalHeight;
+        const imgRatio = imgW / imgH;
+        const screenRatio = width / height;
+
+        let sx, sy, sWidth, sHeight;
+        if (screenRatio > imgRatio) {
+            sWidth = imgW;
+            sHeight = imgW / screenRatio;
+            sx = 0;
+            sy = (imgH - sHeight) / 2;
+        } else {
+            sHeight = imgH;
+            sWidth = imgH * screenRatio;
+            sx = (imgW - sWidth) / 2;
+            sy = 0;
+        }
+
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, width, height);
+        return true;
+    }
+
+    function drawBackground() {
+        const targetBg = (currentGameState === "PLAYING") ? bgIngameImg : bgMenuImg;
+        const imageDrawn = drawCoverImage(targetBg);
+
+        if (!imageDrawn) {
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, "#131a26");
+            gradient.addColorStop(0.7, "#0d131c");
+            gradient.addColorStop(1, "#080c12");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.strokeStyle = "rgba(70, 110, 170, 0.07)";
+            ctx.lineWidth = 1;
+            for (let x = 0; x < width; x += 45) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, floorY);
+                ctx.stroke();
+            }
+            for (let y = 30; y < floorY; y += 45) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
+            floorGrad.addColorStop(0, "#1f2838");
+            floorGrad.addColorStop(0.2, "#151c27");
+            floorGrad.addColorStop(1, "#0a0e14");
+            ctx.fillStyle = floorGrad;
+            ctx.fillRect(0, floorY, width, height - floorY);
+        }
+
+        if (graphicQuality !== "low") {
+            ctx.shadowColor = "#00d4ff";
+            ctx.shadowBlur = 8;
+        }
+        ctx.fillStyle = "#3e8bff";
+        ctx.fillRect(0, floorY, width, 3);
+        ctx.shadowBlur = 0;
+
+        // Garis batas langit-langit di bawah bar HP
+        ctx.fillStyle = "rgba(0, 212, 255, 0.25)";
+        ctx.fillRect(0, ceilingY, width, 1.5);
+    }
+
+    // --- GAME RESET & START ---
+    function startMatch(resetRounds = false) {
+        if (resetRounds) round = 1;
+
+        Composite.clear(world, false);
+        Engine.clear(engine);
+
+        particles = [];
+        floatingTexts = [];
+        projectiles = [];
+        explosions = [];
+        lightningEffects = [];
+        players = [];
+        gameEnded = false;
+        countdown = 45;
+        screenShake = 0;
+        hitStop = 0;
+
+        makeWalls();
+
+        const p1Color = COLORS[selection.p1.colorIdx].hex;
+        const p1Wep = WEAPONS[selection.p1.weaponIdx];
+
+        const isTraining = (gameMode === "TRAINING");
+        const p2Color = isTraining ? "#ff9100" : COLORS[selection.p2.colorIdx].hex;
+        const p2Wep = isTraining ? WEAPONS[0] : WEAPONS[selection.p2.weaponIdx];
+
+        players.push(
+            createPlayer(1, width * 0.25, p1Color, p1Wep, 1, {
+                up: "w", down: "s", left: "a", right: "d", attack: "f"
+            }, false),
+            createPlayer(2, width * 0.75, p2Color, p2Wep, -1, {
+                up: "arrowup", down: "arrowdown", left: "arrowleft", right: "arrowright", attack: "enter"
+            }, isTraining)
+        );
+
+        // Update HUD
+        document.querySelector("#hudNameP1").textContent = "PLAYER 1";
+        document.querySelector("#hudNameP1").style.color = p1Color;
+        document.querySelector("#hp1").style.background = `linear-gradient(90deg, #0077ff, ${p1Color})`;
+
+        document.querySelector("#hudNameP2").textContent = isTraining ? "DUMMY (TRAINING)" : "PLAYER 2";
+        document.querySelector("#hudNameP2").style.color = p2Color;
+        document.querySelector("#hp2").style.background = `linear-gradient(90deg, #ff7b00, ${p2Color})`;
+
+        document.querySelector("#ctrlNameP1").style.color = p1Color;
+        document.querySelector("#ctrlNameP2").style.color = p2Color;
+
+        updateHud();
+        document.querySelector("#roundBadge").textContent = isTraining ? "TRAINING" : "ROUND " + round;
+
+        announcement.innerHTML =
+            `<h1 style="color:${p1Color}">${isTraining ? "TRAINING MODE" : "ROUND " + round}</h1>
+             <p>${isTraining ? "Latihan bebas menguji 10 senjata unik!" : "Arahkan senjata dan kalahkan lawan!"}</p>`;
+        announcement.style.display = "block";
+        announcement.style.opacity = "1";
+    }
+
+    function updateHud() {
+        players.forEach(p => {
+            const bar = document.querySelector("#hp" + p.id);
+            const val = document.querySelector("#hp" + p.id + "-val");
+            const clampedHp = Math.max(0, Math.round(p.hp));
+            if (bar) bar.style.width = clampedHp + "%";
+            if (val) val.textContent = (p.isDummy ? "∞" : clampedHp) + " HP";
+        });
+    }
+
+    // --- IDLE MENU BACKGROUND STICKMEN ---
+    let menuStickmen = [];
+    function initMenuBackground() {
+        Composite.clear(world, false);
+        Engine.clear(engine);
+        makeWalls();
+        menuStickmen = [
+            createPlayer(1, width * 0.35, "#00f0ff", WEAPONS[0], 1, {}, false),
+            createPlayer(2, width * 0.65, "#ff3366", WEAPONS[4], -1, {}, false)
+        ];
+    }
+
+    function updateMenuBackground() {
+        const t = Date.now() * 0.003;
+        menuStickmen.forEach((p, idx) => {
+            const body = p.body;
+            Body.setPosition(body, {
+                x: body.position.x,
+                y: floorY - 58 + Math.sin(t + idx * 2) * 4
+            });
+            p.aimAngle = (p.facing === 1 ? 0.3 : Math.PI - 0.3) + Math.sin(t * 1.5 + idx) * 0.15;
+            p.walkCycle = 0;
+            p.grounded = true;
+        });
+    }
+
+    // --- SELECTION PREVIEW RENDERER ---
+    function renderPlayerPreview(canvasId, colorHex, weaponObj, facing) {
+        const c = document.getElementById(canvasId);
+        if (!c) return;
+        const pCtx = c.getContext("2d");
+        const pw = c.width;
+        const ph = c.height;
+
+        pCtx.clearRect(0, 0, pw, ph);
+
+        const pFloor = ph - 16;
+        pCtx.fillStyle = "rgba(40, 55, 80, 0.4)";
+        pCtx.fillRect(0, pFloor, pw, 2);
+
+        const centerX = pw / 2;
+        pCtx.fillStyle = "rgba(0, 0, 0, 0.4)";
+        pCtx.beginPath();
+        pCtx.ellipse(centerX, pFloor + 2, 22, 6, 0, 0, Math.PI * 2);
+        pCtx.fill();
+
+        const breathe = Math.sin(Date.now() * 0.005) * 2;
+        const headY = pFloor - 72 + breathe;
+        const neckY = headY + 12;
+        const pelvisY = pFloor - 30 + breathe;
+        const shoulder = { x: centerX + facing * 4, y: neckY + 4 };
+        const hipFront = { x: centerX + facing * 4, y: pelvisY };
+        const hipBack = { x: centerX - facing * 4, y: pelvisY };
+
+        // Kaki Belakang
+        pCtx.strokeStyle = colorHex;
+        pCtx.lineWidth = 6;
+        pCtx.lineCap = "round";
+        pCtx.beginPath();
+        pCtx.moveTo(hipBack.x, hipBack.y);
+        pCtx.lineTo(centerX - facing * 8, pFloor - 14);
+        pCtx.lineTo(centerX - facing * 12, pFloor - 2);
+        pCtx.stroke();
+
+        // Badan
+        pCtx.lineWidth = 10;
+        pCtx.beginPath();
+        pCtx.moveTo(centerX, neckY);
+        pCtx.lineTo(centerX, pelvisY);
+        pCtx.stroke();
+
+        // Kaki Depan
+        pCtx.lineWidth = 7;
+        pCtx.beginPath();
+        pCtx.moveTo(hipFront.x, hipFront.y);
+        pCtx.lineTo(centerX + facing * 6, pFloor - 14);
+        pCtx.lineTo(centerX + facing * 10, pFloor - 2);
+        pCtx.stroke();
+
+        // Kepala
+        pCtx.fillStyle = colorHex;
+        pCtx.beginPath();
+        pCtx.arc(centerX, headY, 13, 0, Math.PI * 2);
+        pCtx.fill();
+
+        // Mata
+        pCtx.fillStyle = "#ffffff";
+        pCtx.beginPath();
+        pCtx.arc(centerX + facing * 5, headY - 2, 2.5, 0, Math.PI * 2);
+        pCtx.fill();
+
+        // Senjata & Tangan
+        const aimAngle = facing === 1 ? 0.32 + Math.sin(Date.now() * 0.004) * 0.08 : Math.PI - 0.32 - Math.sin(Date.now() * 0.004) * 0.08;
+        const hand = {
+            x: shoulder.x + Math.cos(aimAngle) * 20,
+            y: shoulder.y + Math.sin(aimAngle) * 20
+        };
+        const tip = {
+            x: hand.x + Math.cos(aimAngle) * (weaponObj.length * 0.8),
+            y: hand.y + Math.sin(aimAngle) * (weaponObj.length * 0.8)
+        };
+
+        // Lengan Depan
+        pCtx.lineWidth = 6.5;
+        pCtx.beginPath();
+        pCtx.moveTo(shoulder.x, shoulder.y);
+        pCtx.lineTo((shoulder.x + hand.x) / 2 + perp(aimAngle).x * 6, (shoulder.y + hand.y) / 2 + perp(aimAngle).y * 6);
+        pCtx.lineTo(hand.x, hand.y);
+        pCtx.stroke();
+
+        pCtx.save();
+        pCtx.shadowColor = colorHex;
+        pCtx.shadowBlur = 8;
+        drawWeapon(hand, tip, aimAngle, weaponObj, colorHex, false);
+        pCtx.restore();
+
+        function perp(a) { return { x: Math.sin(a), y: -Math.cos(a) }; }
+    }
+
+    // --- MAIN RENDER & GAME LOOP ---
+    function loop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const delta = Math.min(timestamp - lastTime, 50);
+        lastTime = timestamp;
+        accumulator += delta;
+
+        if (currentGameState === "PLAYING") {
+            while (accumulator >= STEP) {
+                if (!gameEnded) {
+                    if (countdown > 0) {
+                        countdown--;
+                        if (countdown === 0) {
+                            announcement.style.opacity = "0";
+                            setTimeout(() => {
+                                if (countdown === 0) announcement.style.display = "none";
+                            }, 300);
+                        }
+                    }
+
+                    if (hitStop > 0) {
+                        hitStop--;
+                    } else {
+                        if (players.length === 2) {
+                            updatePlayer(players[0]);
+                            updatePlayer(players[1]);
+                            updateProjectiles();
+                            if (countdown === 0) {
+                                updateCombat(players[0], players[1]);
+                            }
+                        }
+                        Engine.update(engine, STEP);
+                    }
+                }
+                accumulator -= STEP;
+            }
+        } else if (currentGameState === "MENU") {
+            updateMenuBackground();
+            accumulator = 0;
+        } else if (currentGameState === "SELECT") {
+            accumulator = 0;
+            renderPlayerPreview("previewCanvasP1", COLORS[selection.p1.colorIdx].hex, WEAPONS[selection.p1.weaponIdx], 1);
+            const p2Col = (gameMode === "TRAINING") ? "#ff9100" : COLORS[selection.p2.colorIdx].hex;
+            const p2Wep = (gameMode === "TRAINING") ? WEAPONS[0] : WEAPONS[selection.p2.weaponIdx];
+            renderPlayerPreview("previewCanvasP2", p2Col, p2Wep, -1);
+        }
+
+        // Render Canvas
+        ctx.save();
+        if (screenShake > 0) {
+            ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+            screenShake *= 0.84;
+            if (screenShake < 0.2) screenShake = 0;
+        }
+
+        drawBackground();
+
+        if (currentGameState === "PLAYING") {
+            players.forEach(p => drawGroundShadow(p));
+            drawVisualEffects();
+            players.forEach(p => {
+                drawStickman(p);
+                drawSwordTrailAndWeapon(p);
+            });
+            drawProjectiles();
+        } else if (currentGameState === "MENU") {
+            menuStickmen.forEach(p => drawGroundShadow(p));
+            menuStickmen.forEach(p => {
+                drawStickman(p);
+                drawSwordTrailAndWeapon(p);
+            });
+        }
+
+        // Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const pt = particles[i];
+            pt.x += pt.vx;
+            pt.y += pt.vy;
+            pt.life -= pt.decay;
+            if (pt.type === "spark") {
+                pt.vx *= 0.94;
+                pt.vy += 0.15;
+            } else {
+                pt.vx *= 0.92;
+                pt.vy *= 0.92;
+            }
+            if (pt.life <= 0) {
+                particles.splice(i, 1);
+                continue;
+            }
+            ctx.save();
+            ctx.globalAlpha = pt.life;
+            ctx.fillStyle = pt.color;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, pt.size * pt.life, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Floating texts
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+            const ft = floatingTexts[i];
+            ft.y += ft.vy;
+            ft.life -= 0.025;
+            if (ft.life <= 0) {
+                floatingTexts.splice(i, 1);
+                continue;
+            }
+            ctx.save();
+            ctx.globalAlpha = ft.life;
+            ctx.fillStyle = ft.color;
+            ctx.shadowColor = "#000000";
+            ctx.shadowBlur = 6;
+            ctx.font = "bold 18px 'Segoe UI', sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(ft.text, ft.x, ft.y);
+            ctx.restore();
+        }
+
+        ctx.restore();
+        requestAnimationFrame(loop);
+    }
+
+    // --- UI NAVIGATION & MODALS ---
+    const layerMenu = document.querySelector("#mainMenuLayer");
+    const layerSelect = document.querySelector("#charSelectLayer");
+    const layerHud = document.querySelector("#gameplayHudLayer");
+
+    function switchLayer(toLayer) {
+        sound.playMenuSelect();
+        [layerMenu, layerSelect, layerHud].forEach(l => l.classList.remove("active"));
+        toLayer.classList.add("active");
+    }
+
+    function showModal(modalId) {
+        sound.playMenuSelect();
+        document.getElementById(modalId).classList.add("active");
+    }
+
+    function closeModal(modalId) {
+        sound.playMenuNav();
+        document.getElementById(modalId).classList.remove("active");
+    }
+
+    document.querySelector("#btnCloseHowTo").onclick = () => closeModal("modalHowTo");
+    document.querySelector("#btnCloseSettings").onclick = () => closeModal("modalSettings");
+    document.querySelector("#btnCloseAbout").onclick = () => closeModal("modalAbout");
+    document.querySelector("#btnCloseMode").onclick = () => closeModal("modalModeSelect");
+
+    document.querySelector("#btnMenuPlay").onclick = () => {
+        sound.init();
+        showModal("modalModeSelect");
+    };
+    document.querySelector("#btnMenuHowTo").onclick = () => showModal("modalHowTo");
+    document.querySelector("#btnMenuSettings").onclick = () => showModal("modalSettings");
+    document.querySelector("#btnMenuAbout").onclick = () => showModal("modalAbout");
+
+    document.querySelector("#modeLocal1v1").onclick = () => {
+        gameMode = "LOCAL1V1";
+        closeModal("modalModeSelect");
+        openCharacterSelect();
+    };
+
+    document.querySelector("#modeTraining").onclick = () => {
+        gameMode = "TRAINING";
+        closeModal("modalModeSelect");
+        openCharacterSelect();
+    };
+
+    function openCharacterSelect() {
+        currentGameState = "SELECT";
+        switchLayer(layerSelect);
+        updateSelectionUI();
+    }
+
+    document.querySelector("#btnBackToMode").onclick = () => {
+        currentGameState = "MENU";
+        switchLayer(layerMenu);
+        initMenuBackground();
+    };
+
+    document.querySelector("#btnReturnMenu").onclick = () => {
+        currentGameState = "MENU";
+        switchLayer(layerMenu);
+        initMenuBackground();
+    };
+
+    // --- SELECTION SCREEN UI LOGIC ---
+    function buildColorPalettes() {
+        const pal1 = document.getElementById("paletteP1");
+        const pal2 = document.getElementById("paletteP2");
+        pal1.innerHTML = "";
+        pal2.innerHTML = "";
+
+        COLORS.forEach((col, idx) => {
+            const sw1 = document.createElement("div");
+            sw1.className = `color-swatch ${idx === selection.p1.colorIdx ? "selected" : ""}`;
+            sw1.style.background = col.hex;
+            sw1.onclick = () => {
+                selection.p1.colorIdx = idx;
+                selection.p1.activeCategory = "color";
+                sound.playMenuNav();
+                updateSelectionUI();
+            };
+            pal1.appendChild(sw1);
+
+            const sw2 = document.createElement("div");
+            sw2.className = `color-swatch ${idx === selection.p2.colorIdx ? "selected" : ""}`;
+            sw2.style.background = col.hex;
+            sw2.onclick = () => {
+                if (gameMode === "TRAINING") return;
+                selection.p2.colorIdx = idx;
+                selection.p2.activeCategory = "color";
+                sound.playMenuNav();
+                updateSelectionUI();
+            };
+            pal2.appendChild(sw2);
+        });
+    }
+
+    function updateSelectionUI() {
+        buildColorPalettes();
+
+        // P1 Info
+        const p1Col = COLORS[selection.p1.colorIdx];
+        const p1Wep = WEAPONS[selection.p1.weaponIdx];
+        document.getElementById("colorNameP1").textContent = p1Col.name.toUpperCase();
+        document.getElementById("weaponNameP1").textContent = p1Wep.name.toUpperCase();
+        document.getElementById("weaponDescP1").textContent = p1Wep.desc;
+        document.getElementById("statRangeP1").style.width = p1Wep.rangeStat + "%";
+        document.getElementById("statSpeedP1").style.width = p1Wep.speedStat + "%";
+        document.getElementById("statDmgP1").style.width = p1Wep.dmgStat + "%";
+
+        const catColP1 = document.getElementById("catLabelColorP1");
+        const catWepP1 = document.getElementById("catLabelWeaponP1");
+        if (selection.p1.activeCategory === "color") {
+            catColP1.classList.add("active-cat");
+            catWepP1.classList.remove("active-cat");
+        } else {
+            catColP1.classList.remove("active-cat");
+            catWepP1.classList.add("active-cat");
+        }
+
+        // P2 Info
+        const isTraining = (gameMode === "TRAINING");
+        const p2Col = isTraining ? { name: "ORANGE DUMMY", hex: "#ff9100" } : COLORS[selection.p2.colorIdx];
+        const p2Wep = isTraining ? WEAPONS[0] : WEAPONS[selection.p2.weaponIdx];
+
+        document.getElementById("nameTitleP2").textContent = isTraining ? "DUMMY BOT" : "PLAYER 2";
+        document.getElementById("colorNameP2").textContent = p2Col.name.toUpperCase();
+        document.getElementById("weaponNameP2").textContent = p2Wep.name.toUpperCase();
+        document.getElementById("weaponDescP2").textContent = isTraining ? "Target latihan untuk menguji 10 senjata unik." : p2Wep.desc;
+        document.getElementById("statRangeP2").style.width = p2Wep.rangeStat + "%";
+        document.getElementById("statSpeedP2").style.width = p2Wep.speedStat + "%";
+        document.getElementById("statDmgP2").style.width = p2Wep.dmgStat + "%";
+
+        const catColP2 = document.getElementById("catLabelColorP2");
+        const catWepP2 = document.getElementById("catLabelWeaponP2");
+        if (selection.p2.activeCategory === "color") {
+            catColP2.classList.add("active-cat");
+            catWepP2.classList.remove("active-cat");
+        } else {
+            catColP2.classList.remove("active-cat");
+            catWepP2.classList.add("active-cat");
+        }
+    }
+
+    // Weapon Nav Buttons
+    document.getElementById("p1WepPrev").onclick = () => {
+        selection.p1.weaponIdx = (selection.p1.weaponIdx - 1 + WEAPONS.length) % WEAPONS.length;
+        selection.p1.activeCategory = "weapon";
+        sound.playMenuNav();
+        updateSelectionUI();
+    };
+    document.getElementById("p1WepNext").onclick = () => {
+        selection.p1.weaponIdx = (selection.p1.weaponIdx + 1) % WEAPONS.length;
+        selection.p1.activeCategory = "weapon";
+        sound.playMenuNav();
+        updateSelectionUI();
+    };
+
+    document.getElementById("p2WepPrev").onclick = () => {
+        if (gameMode === "TRAINING") return;
+        selection.p2.weaponIdx = (selection.p2.weaponIdx - 1 + WEAPONS.length) % WEAPONS.length;
+        selection.p2.activeCategory = "weapon";
+        sound.playMenuNav();
+        updateSelectionUI();
+    };
+    document.getElementById("p2WepNext").onclick = () => {
+        if (gameMode === "TRAINING") return;
+        selection.p2.weaponIdx = (selection.p2.weaponIdx + 1) % WEAPONS.length;
+        selection.p2.activeCategory = "weapon";
+        sound.playMenuNav();
+        updateSelectionUI();
+    };
+
+    // START BATTLE TRIGGER
+    document.querySelector("#btnStartBattle").onclick = () => {
+        currentGameState = "PLAYING";
+        switchLayer(layerHud);
+        startMatch(true);
+    };
+
+    // HUD Button triggers
+    document.querySelector("#btnHudRestart").onclick = () => {
+        sound.init();
+        round++;
+        startMatch(false);
+    };
+
+    const hudAudioBtn = document.querySelector("#btnHudAudio");
+    hudAudioBtn.onclick = () => {
+        sound.init();
+        sound.muted = !sound.muted;
+        hudAudioBtn.textContent = sound.muted ? "🔇 Suara: OFF" : "🔊 Suara: ON";
+    };
+
+    // Settings Sliders
+    const volumeSlider = document.getElementById("volumeSlider");
+    const volumeValue = document.getElementById("volumeValue");
+    volumeSlider.oninput = () => {
+        sound.init();
+        sound.volume = volumeSlider.value / 100;
+        volumeValue.textContent = volumeSlider.value + "%";
+    };
+
+    const sfxToggleBtn = document.getElementById("btnToggleSoundSetting");
+    sfxToggleBtn.onclick = () => {
+        sound.init();
+        sound.muted = !sound.muted;
+        sfxToggleBtn.textContent = sound.muted ? "🔇 NONAKTIF" : "🔊 AKTIF";
+        hudAudioBtn.textContent = sound.muted ? "🔇 Suara: OFF" : "🔊 Suara: ON";
+    };
+
+    document.getElementById("selectGraphics").onchange = (e) => {
+        graphicQuality = e.target.value;
+    };
+
+    document.getElementById("btnToggleFullscreen").onclick = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+            document.exitFullscreen().catch(() => {});
+        }
+    };
+
+    // --- KEYBOARD LISTENERS ---
+    window.addEventListener("keydown", event => {
+        sound.init();
+        const key = event.key.toLowerCase();
+
+        if (["arrowleft", "arrowright", "arrowup", "arrowdown", "enter", " ", "space"].includes(key)) {
+            event.preventDefault();
+        }
+
+        // ============================================
+        // 1. KETIKA DI HALAMAN PEMILIHAN KARAKTER
+        // ============================================
+        if (currentGameState === "SELECT") {
+            if (!keys[key]) {
+                // Navigasi PLAYER 1 (W, A, S, D, F)
+                if (key === "w") {
+                    selection.p1.activeCategory = "color";
+                    sound.playMenuNav();
+                    updateSelectionUI();
+                } else if (key === "s") {
+                    selection.p1.activeCategory = "weapon";
+                    sound.playMenuNav();
+                    updateSelectionUI();
+                } else if (key === "a") {
+                    if (selection.p1.activeCategory === "color") {
+                        selection.p1.colorIdx = (selection.p1.colorIdx - 1 + COLORS.length) % COLORS.length;
+                    } else {
+                        selection.p1.weaponIdx = (selection.p1.weaponIdx - 1 + WEAPONS.length) % WEAPONS.length;
+                    }
+                    sound.playMenuNav();
+                    updateSelectionUI();
+                } else if (key === "d") {
+                    if (selection.p1.activeCategory === "color") {
+                        selection.p1.colorIdx = (selection.p1.colorIdx + 1) % COLORS.length;
+                    } else {
+                        selection.p1.weaponIdx = (selection.p1.weaponIdx + 1) % WEAPONS.length;
+                    }
+                    sound.playMenuNav();
+                    updateSelectionUI();
+                } else if (key === "f") {
+                    sound.playMenuSelect();
+                    document.getElementById("readyP1").classList.toggle("is-ready");
+                }
+
+                // Navigasi PLAYER 2 (Panah & Enter)
+                if (gameMode !== "TRAINING") {
+                    if (key === "arrowup") {
+                        selection.p2.activeCategory = "color";
+                        sound.playMenuNav();
+                        updateSelectionUI();
+                    } else if (key === "arrowdown") {
+                        selection.p2.activeCategory = "weapon";
+                        sound.playMenuNav();
+                        updateSelectionUI();
+                    } else if (key === "arrowleft") {
+                        if (selection.p2.activeCategory === "color") {
+                            selection.p2.colorIdx = (selection.p2.colorIdx - 1 + COLORS.length) % COLORS.length;
+                        } else {
+                            selection.p2.weaponIdx = (selection.p2.weaponIdx - 1 + WEAPONS.length) % WEAPONS.length;
+                        }
+                        sound.playMenuNav();
+                        updateSelectionUI();
+                    } else if (key === "arrowright") {
+                        if (selection.p2.activeCategory === "color") {
+                            selection.p2.colorIdx = (selection.p2.colorIdx + 1) % COLORS.length;
+                        } else {
+                            selection.p2.weaponIdx = (selection.p2.weaponIdx + 1) % WEAPONS.length;
+                        }
+                        sound.playMenuNav();
+                        updateSelectionUI();
+                    } else if (key === "enter") {
+                        sound.playMenuSelect();
+                        document.getElementById("readyP2").classList.toggle("is-ready");
+                    }
+                }
+            }
+            keys[key] = true;
+            return;
+        }
+
+        // ============================================
+        // 2. KETIKA DI PERTANDINGAN GAMEPLAY
+        // ============================================
+        if (currentGameState === "PLAYING") {
+            if (!keys[key]) {
+                // Tombol SPASI: hanya jika sudah ada yang menang
+                if (key === " " || key === "space") {
+                    if (gameEnded) {
+                        sound.init();
+                        round++;
+                        startMatch(false);
+                    }
+                    return;
+                }
+
+                const now = performance.now();
+
+                // Player 1 Attack / Charge
+                if (key === "f" && players[0] && players[0].alive) {
+                    const p1 = players[0];
+                    if (p1.weapon.id === "staff" || p1.weapon.id === "bow") {
+                        if (!p1.isCharging && now >= p1.nextAttackTime) {
+                            p1.isCharging = true;
+                            p1.chargeStartTime = now;
+                            p1.chargeProgress = 0;
+                        }
+                    } else {
+                        executeWeaponAttack(p1, now);
+                    }
+                }
+
+                // Player 2 Attack / Charge
+                if (key === "enter" && players[1] && !players[1].isDummy && players[1].alive) {
+                    const p2 = players[1];
+                    if (p2.weapon.id === "staff" || p2.weapon.id === "bow") {
+                        if (!p2.isCharging && now >= p2.nextAttackTime) {
+                            p2.isCharging = true;
+                            p2.chargeStartTime = now;
+                            p2.chargeProgress = 0;
+                        }
+                    } else {
+                        executeWeaponAttack(p2, now);
+                    }
+                }
+            }
+            keys[key] = true;
+        }
+    });
+
+    window.addEventListener("keyup", event => {
+        const key = event.key.toLowerCase();
+        keys[key] = false;
+
+        if (currentGameState === "PLAYING") {
+            const now = performance.now();
+
+            if (key === "f" && players[0] && players[0].isCharging) {
+                const chargeMs = now - players[0].chargeStartTime;
+                players[0].isCharging = false;
+                executeChargedAttack(players[0], now, chargeMs);
+            }
+
+            if (key === "enter" && players[1] && players[1].isCharging && !players[1].isDummy) {
+                const chargeMs = now - players[1].chargeStartTime;
+                players[1].isCharging = false;
+                executeChargedAttack(players[1], now, chargeMs);
+            }
+        }
+    });
+
+    window.addEventListener("blur", () => {
+        Object.keys(keys).forEach(k => keys[k] = false);
+        if (players[0]) players[0].isCharging = false;
+        if (players[1]) players[1].isCharging = false;
+    }); 
+
+    window.addEventListener("resize", () => {
+        resize();
+    });
+
+    // --- BOOT ENGINE ---
+    resize();
+    initMenuBackground();
+    requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
